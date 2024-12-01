@@ -1,0 +1,95 @@
+{
+	"InstanceName": "bar-n100-1-CW",
+	"Orders": [
+		{
+			"CustomerName": "CustomerName-0",
+			"CollectId": "C-0",
+			"DeliverId": "D-0",
+			"CollectSiteId": "0",
+			"DeliverSiteId": "1",
+			"EarliestCollect1": "2022-01-01T08:00:00",
+			"LatestCollect1": "2023-01-01T08:00:00",
+			"EarliestDeliver1": "2022-01-01T08:00:00",
+			"LatestDeliver1": "2023-01-01T08:00:00",
+			"CollectTimeInMinutes": 0,
+			"DeliverTimeInMinutes": 120,
+			"Weight": 22
+		},
+		{
+			"CustomerName": "CustomerName-1",
+			"CollectId": "C-1",
+			"DeliverId": "D-1",
+			"CollectSiteId": "1",
+			"DeliverSiteId": "2",
+			"EarliestCollect1": "2022-01-01T08:00:00",
+			"LatestCollect1": "2023-01-01T08:00:00",
+			"EarliestDeliver1": "2022-01-01T08:00:00",
+			"LatestDeliver1": "2023-01-01T08:00:00",
+			"CollectTimeInMinutes": 0,
+			"DeliverTimeInMinutes": 0,
+			"Weight": 20
+		},
+	],
+	"Vehicles": [
+		{
+			"Id": "1",
+			"StartSite": "0",
+			"StartTime": "2022-01-01T08:00:00",
+			"VehicleCapacity": [
+				{
+					"CompartmentId": "1",
+					"Weight": 300
+				}
+			],
+			"EndSite": "0"
+		}
+	],
+	"Configuration": {
+		"MaxDutyTimeMins": 2880,
+		"MaxDriveTimeMins": 2880
+	},
+	"Matrix": {
+		"Locations": [
+			"41.3975366, 2.1235633",
+			"41.4005256, 2.1171344",
+			"41.3940602, 2.1909486",
+		],
+		"Data": [
+			[
+				[
+					null,
+					[
+						14400,
+						14400
+					],
+					[
+						1800,
+						1800
+					]
+				],
+				[
+					[
+						144000,
+						14400
+					],
+					null,
+					[
+						7200,
+						7200
+					]
+				],
+				[
+					[
+						180000,
+						1800
+					],
+					[
+						7200,
+						7200
+					],
+					null
+				],	
+			]
+		]
+	}
+}
