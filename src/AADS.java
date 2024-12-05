@@ -5947,11 +5947,11 @@ public class AADS {
     }
 
     protected static List<Individual> initialIndividualsByLargeData(List<Individual> individuals, int nPop,
-                                                                    int len, PreProcessData data) {
+                                                                    int len, Random random, PreProcessData data) {
         for (int i = 0; i < nPop; i++) {
             List<Route> routeList = new ArrayList<>();
             System.out.println("len: " + len);
-            Collections.shuffle(data.getVehicleList()); // 随机打乱
+            Collections.shuffle(data.getVehicleList(), random); // 随机打乱，指定seed
             for (int j = 0; j < len; j++) {
                 // 1. 将j作为获取车辆的下标(每次先获取第一辆车作为要创建的新路线的用车)
                 Vehicle vehicle = data.getVehicleList().get(j);
@@ -6074,7 +6074,7 @@ public class AADS {
 
         // 2. generate nPop number of individuals
         if (len >= data.getCustomerList().size() && len >= 50) { // 大数据量，按照请求customer为单位
-            individuals = initialIndividualsByLargeData(individuals, nPop, len, data);
+            individuals = initialIndividualsByLargeData(individuals, nPop, len, random, data);
         } else { // 小数据量，按照取货送货先后进行
             individuals = initialIndividualsBySmallData(individuals, nPop, len, random, data);
         }
@@ -6109,10 +6109,10 @@ public class AADS {
             return population;
         } else { // 针对小数据量
             res = assignCustomers(individuals, data, method, sucCustomers, data.getCustomerList());
-        }
-        if (res != null) {
-            individuals = res.getFirst(); // individual list
-            sucCustomers = res.getSecond(); // successful customers
+            if (res != null) {
+                individuals = res.getFirst(); // individual list
+                sucCustomers = res.getSecond(); // successful customers
+            }
         }
 //        System.out.println("individuals: " + individuals);
         System.out.println("分配后获得的sucCustomers: " + sucCustomers);
