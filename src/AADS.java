@@ -3734,7 +3734,7 @@ public class AADS {
                 } else {
                     curTime = (getVehicle().getStartTime()).getTime(); // vehicle的发车时间作为起始时间
                 }
-                System.out.println("啊啊啊 " + new Date(curTime));
+                System.out.println("new Date " + new Date(curTime));
 
                 // 获取当前Route的发车时间、累计duration
                 Date date = data.getOverallDeliverTime();
@@ -3794,8 +3794,7 @@ public class AADS {
                     // 判断发车地点、取货地点是否是同个地点
                     if (startSite == collectSite) {
                         // 若是，则判断发车时间是否在时间窗口内
-                        long tmp = curTime; // 记录更新操作前的当前时间
-                        System.out.println("问题: " + new Date(curTime));
+                        long tmp = curTime; // 记录取货更新操作前的当前时间
                         System.out.println("问题: " + customer.getCollectTimeWindow().getStart());
                         System.out.println("问题: " + customer.getCollectTimeWindow().getEnd());
                         if (curTime >= customer.getCollectTimeWindow().getStart().getTime()
@@ -4069,7 +4068,7 @@ public class AADS {
                         JSONArray arr = new JSONArray((String) startSite.getDisAndTime().toList().get((int) deliverSite.getId()));
                         long deliverRouteTime = ((Integer) arr.opt(1)).longValue(); // 加上取货地点->送货地点的时间
                         int deliverRouteDistance = (Integer) arr.opt(0); // distance between collect site and deliver site
-                        long tmp = curTime; // 记录更新操作前的当前时间
+                        long tmp = curTime; // 记录取货后，送货更新操作前的当前时间
 
                         System.out.println("deliverRouteTime: " + deliverRouteTime + "s");
 //                    System.out.println("22: " + curTime + "ms; " + customer.getDeliverTimeWindow().getStart().getTime() + "ms");
@@ -4380,7 +4379,6 @@ public class AADS {
                             System.out.println("The customer " + customer.getId() + " should meet the precedence constraints: " +
                                     "the collect site must be the predecessor of the delivered site.");
                             return new InnerTuple<>(false, new GlobalData());
-//                            return -1;
                         }
                     }
                 }
@@ -4389,7 +4387,6 @@ public class AADS {
                 if (getOverallWeight() + customer.getWeight() > getVehicle().getWeight()) {
                     System.out.println("The capacity of vehicle " + getVehicle().getId() +
                             " is full and new customers cannot be added.");
-//                    return false;
                     return new InnerTuple<>(false, new GlobalData());
                 }
 
@@ -4400,6 +4397,18 @@ public class AADS {
                 } else {
                     curTime = (getVehicle().getStartTime()).getTime(); // vehicle的发车时间作为起始时间
                 }
+
+                // 获取当前Route的发车时间、累计duration
+                Date date = data.getOverallDeliverTime();
+                long duration = 0;
+                if (date != null) duration = date.getTime();
+                long vehicleStartTime = (getVehicle().getStartTime()).getTime();
+                System.out.println("DURATION: " + date + "; " + duration);
+                System.out.println("发车：" + new Date(vehicleStartTime) + "; " + vehicleStartTime);
+                System.out.println("差值： " + (duration - vehicleStartTime));
+
+//                // 获取车辆发车时间
+//                long vehicleStartTime = (getVehicle().getStartTime()).getTime();
 
                 // 获取当前Route的累计break、other work、drive time
 //                long breakTime = 0, otherTime = 0, driveTime = 0;
@@ -4439,7 +4448,7 @@ public class AADS {
                 // 5. 判断发车地点、取货地点是否是同个地点
                 if (startSite == collectSite) {
                     // 若是，则判断发车时间是否在时间窗口内
-                    long tmp = curTime; // 记录更新操作前的当前时间
+                    long tmp = curTime; // 记录取货更新操作前的当前时间
                     if (curTime >= customer.getCollectTimeWindow().getStart().getTime()
                             && curTime <= customer.getCollectTimeWindow().getEnd().getTime()) {
 //                        System.out.println("!!directly COLLECT!!"); // test
@@ -4454,7 +4463,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         List<Long> breakResult = needBreaks(curTime,
-                                customer.getCollectTimeinMinutes() * 60 * 1000,
+//                                customer.getCollectTimeinMinutes() * 60 * 1000,
+                                curTime - tmp,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4485,7 +4495,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         List<Long> breakResult = needBreaks(curTime,
-                                wait + customer.getCollectTimeinMinutes() * 60 * 1000,
+//                                wait + customer.getCollectTimeinMinutes() * 60 * 1000,
+                                curTime - tmp,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4544,7 +4555,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         List<Long> breakResult = needBreaks(curTime,
-                                collectRouteTime * 1000,
+//                                collectRouteTime * 1000,
+                                curTime - tmp,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4562,7 +4574,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         breakResult = needBreaks(curTime,
-                                collectRouteTime * 1000 + customer.getCollectTimeinMinutes() * 60 * 1000,
+//                                collectRouteTime * 1000 + customer.getCollectTimeinMinutes() * 60 * 1000,
+                                curTime - tmp,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4598,7 +4611,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         List<Long> breakResult = needBreaks(curTime,
-                                wait + collectRouteTime * 1000,
+//                                wait + collectRouteTime * 1000,
+                                curTime - tmp,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4618,7 +4632,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         breakResult = needBreaks(curTime,
-                                wait + collectRouteTime * 1000 + customer.getCollectTimeinMinutes() * 60 * 1000,
+//                                wait + collectRouteTime * 1000 + customer.getCollectTimeinMinutes() * 60 * 1000,
+                                curTime - tmp,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4663,7 +4678,7 @@ public class AADS {
                     JSONArray arr = new JSONArray((String) collectSite.getDisAndTime().toList().get((int) deliverSite.getId()));
                     long deliverRouteTime = ((Integer) arr.opt(1)).longValue(); // 加上取货地点->送货地点的时间
                     int deliverRouteDistance = (Integer) arr.opt(0); // distance between collect site and deliver site
-                    long tmp = curTime; // 记录更新操作前的当前时间
+                    long tmp = curTime; // 记录取货后，送货更新操作前的当前时间
 
 //                    System.out.println("deliverRouteTime: " + deliverRouteTime + "s");
 //                    System.out.println("22: " + curTime + "ms; " + customer.getDeliverTimeWindow().getStart().getTime() + "ms");
@@ -4694,7 +4709,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         List<Long> breakResult = needBreaks(curTime,
-                                deliverRouteTime * 1000,
+//                                deliverRouteTime * 1000,
+                                curTime - vehicleStartTime,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4712,7 +4728,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         breakResult = needBreaks(curTime,
-                                deliverRouteTime * 1000 + customer.getDeliverTimeinMinutes() * 60 * 1000,
+//                                deliverRouteTime * 1000 + customer.getDeliverTimeinMinutes() * 60 * 1000,
+                                curTime - vehicleStartTime,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4748,7 +4765,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         List<Long> breakResult = needBreaks(curTime,
-                                wait + deliverRouteTime * 1000,
+//                                wait + deliverRouteTime * 1000,
+                                curTime - vehicleStartTime,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4768,7 +4786,8 @@ public class AADS {
                                 customer.getId(),
                                 "temp"); // 创建时间节点
                         breakResult = needBreaks(curTime,
-                                wait + deliverRouteTime * 1000 + customer.getDeliverTimeinMinutes() * 60 * 1000,
+//                                wait + deliverRouteTime * 1000 + customer.getDeliverTimeinMinutes() * 60 * 1000,
+                                curTime - vehicleStartTime,
                                 breakTime, otherTime, driveTime, customer); // check whether a break is need
                         if (!breakResult.isEmpty()) {
                             breakTime = breakResult.get(0);
@@ -4796,8 +4815,9 @@ public class AADS {
                 }
 
                 // 测试总用时
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                 Date overallDeliverTime = new Date(curTime);
-//                System.out.println("Overall Time: " + sdf.format(overallDeliverTime));
+                System.out.println("OverallDeliverTime: " + sdf.format(overallDeliverTime));
 //                System.out.println("Overall Drive Time: " + (driveTime / (1000 * 60)) + "min");
 //                System.out.println("Overall Other work Time: " + (otherTime / (1000 * 60)) + "min");
 //                System.out.println("Overall Break Time: " + (breakTime / (1000 * 60)) + "min");
@@ -4854,20 +4874,7 @@ public class AADS {
 
                 // 11. 标记为已送货
                 customer.setDelivered(true);
-
-                // 当前请求加入全局列表 TODO 1206 1248添加
-//                    assignedCustomer.add(customer);
-                List<Customer> customerList = assignedCustomer.get(getId());
-                if (customerList != null) { // 有元素，则添加
-                    customerList.add(customer);
-                    assignedCustomer.put(getId(), customerList);
-                } else { // 没元素，则新建列表
-                    List<Customer> newList = new ArrayList<>();
-                    newList.add(customer);
-                    assignedCustomer.put(getId(), newList);
-                }
-
-                System.out.println("cus: " + customer.getId() + " can.");
+                System.out.println("cusId: " + customer.getId() + " can. carID: " + getVehicle().getId());
             } else {
                 System.out.println("Please ensure that the new request is valid.");
                 return new InnerTuple<>(true, new GlobalData());
@@ -4989,7 +4996,9 @@ public class AADS {
         public Boolean returnToDepot(Customer customer, PreProcessData data, long dailyDriveTime, long overallDuration) {
             if (customer != null) {
                 // 1. 获取全局data中需要使用的数据
-                long curTime = data.getCurTime(); // 送完货的耗时
+//                long curTime = data.getCurTime(); // 送完货的耗时
+                long curTime = overallDuration;
+                System.out.println("返程！： " + overallDuration + " ms; " + new Date(overallDuration));
                 Site deliverSite = data.getDeliverSite();
 //                System.out.println("return back time：" + data.getCurTime());
 
@@ -5036,16 +5045,22 @@ public class AADS {
                     long newOverallDuration = curTime;
                     // 1) route duration
                     long mDuration = (long) curVehicle.getMDurationInHours() * 60 * 60 * 1000;
-                    if (newOverallDuration > mDuration) {
+//                    if (newOverallDuration > mDuration) {
+                    if ((newOverallDuration - (curVehicle.getStartTime()).getTime()) > mDuration) {
                         throw new RuntimeException("The vehicle " + curVehicle.getId() + " has worked more than 13 hours in one day.");
                     }
-                    // 2) daily drive time
+                    // 2) daily drive time (should add the start time of vehicle and then do subtraction)
                     long mDailyDrive = (long) curVehicle.getmDailyDriveInHours() * 60 * 60 * 1000;
-                    if ((dailyDriveTime - (curVehicle.getStartTime()).getTime()) > mDailyDrive) {
+//                    System.out.println("测试测试1："+(dailyDriveTime+curVehicle.getStartTime().getTime())+" ; "+new Date((dailyDriveTime+curVehicle.getStartTime().getTime())));
+//                    System.out.println("测试测试2："+(curVehicle.getStartTime()).getTime()+" ; "+new Date((curVehicle.getStartTime()).getTime()));
+//                    System.out.println("测试测试3："+((dailyDriveTime+curVehicle.getStartTime().getTime()) - (curVehicle.getStartTime()).getTime()));
+//                    if ((dailyDriveTime - (curVehicle.getStartTime()).getTime()) > mDailyDrive) {
+                    if (((dailyDriveTime + curVehicle.getStartTime().getTime()) - (curVehicle.getStartTime()).getTime()) > mDailyDrive) {
                         throw new RuntimeException("The vehicle " + curVehicle.getId() + " has driven more than 9 hours in one day.");
                     }
 
                     // 7. update parameters
+                    System.out.println("返程函数里overall duration: " + new Date(newOverallDuration) + "; vehicleId: " + getVehicle().getId());
                     setOverallDuration(newOverallDuration); // 设置overall route duration
                     setOverallDistance(getOverallDistance() + returnDistance); // 设置overall travel distance
                     setEndTime(new Date(getStartTime().getTime() + newOverallDuration)); // 设置为回到起点的时间
@@ -5747,7 +5762,7 @@ public class AADS {
             }
         } else { // 以订单为单位,遍历所有请求Customer，为当前请求Customer分配一辆新车Vehicle，并为该车临时初始化一条新路线Route
             // 1. 遍历每个个体的路线
-            // TODO 1206 1107注释👇可运行的代码
+            // TODO 1206 1107注释👇随机分配实现前，可运行的代码
 //            for (Individual individual : individuals) {
 //                for (Route route : individual.getRoutes()) {
 //                    long min = Long.MAX_VALUE; // 设为最大值
@@ -5805,7 +5820,9 @@ public class AADS {
 //                    }
 //                }
 //            }
-            // TODO 1206 1107注释↑可运行的代码
+            // TODO 1206 1107注释👆随机分配实现前，可运行的代码
+            double sumCost = 0.0; // test
+            double sumDuration = 0.0; // test
 
             for (Customer customer : customerList) {
                 long min = Long.MAX_VALUE;
@@ -5817,13 +5834,13 @@ public class AADS {
 
                 for (Individual individual : individuals) {
                     for (Route r : individual.getRoutes()) {
-                        if (customer!=null && customer.isDelivered()) continue; // 若已被分配，则跳过
-
+                        if (customer != null && customer.isDelivered()) continue; // 若已被分配，则跳过
+                        // 判断能否添加当前请求
                         Tuple<Boolean, GlobalData> canAdd = r.canAddACustomerByCombination(customer, data);
 //                        System.out.println("cus: " + customer.getId() + " " + canAdd.getFirst());
                         if (canAdd != null && canAdd.getFirst()) {
                             long cost = canAdd.getSecond().getCurTime();
-                            System.out.println("The cost of this route::！ " + cost);
+                            System.out.println("The cost of this route::！ " + cost + "; " + cost / (1000 * 60.0) + " min");
                             System.out.println("min cost::！ " + min);
                             if (cost < min) {
                                 min = cost;
@@ -5838,6 +5855,9 @@ public class AADS {
                                 globalData = canAdd.getSecond();
                                 // 成功分配
                                 flag = true;
+
+                                sumCost += cost / (1000 * 60.0); // test
+                                sumDuration += bestRoute.getOverallDuration(); // test
                             }
                         } else {
                             System.out.println("这？？");
@@ -5874,6 +5894,10 @@ public class AADS {
 //                    unassignedCustomer.add(customer);
                 }
             }
+
+            System.out.println("Final cost: " + sumCost + " min"); // test
+            System.out.println("Final duration: " + sumDuration + " min"); // test
+
 //            // 执行每条路线的返程  TODO  1206 0132
 //            System.out.println("SuC: " + sucCustomers.keySet());
 //            System.out.println("SS: "+sucCustomers.get(45).getRoute().getCustomers().toString());
@@ -5962,6 +5986,8 @@ public class AADS {
 
     protected static void addReturnRoute(Map<Integer, SucCustomerDto> sucCustomers, PreProcessData data, List<Individual> individuals) {
         // 遍历每个路线,分别添加返程
+        double sum = 0.0;
+
         for (Entry<Integer, SucCustomerDto> entry : sucCustomers.entrySet()) {
 //            System.out.println("routeIdx: " + entry.getKey());
 
@@ -5993,11 +6019,11 @@ public class AADS {
             if (!customerList.isEmpty() && !dto.isReturned()) {
                 boolean canReturn; // 是否能返程
                 try {
-//                    System.out.println("route::: " + route.getId());
                     canReturn = route.returnToDepot(customer, data,
                             dailyDriveTime,
                             overallDuration + vehicleStartTime); // input daily overall drive time
                 } catch (RuntimeException e) {
+                    System.out.println("错误？");
                     continue;
                 }
                 if (canReturn) {
@@ -6005,18 +6031,36 @@ public class AADS {
                     List<Route> rawRoutes = individual.getRoutes();
                     rawRoutes.set(routeIdx, route);
                     individual.setRoutes(rawRoutes);
-                    // 2)更新fitness
-                    double newFitness = 0.0;
-                    for (Route r : individual.getRoutes()) {
-                        newFitness += r.getOverallDuration();
-                    }
-                    individual.setFitness(newFitness);
-                    individuals.set(individualIdx, individual); // 更新individual
-                    // 3)更新dto是否处理返回仓库的标记
+//                    // 2)更新fitness  TODO   需要在其他地方设置总fitness
+//                    double newFitness = 0.0;
+//                    for (Route r : individual.getRoutes()) {
+//                        newFitness += r.getOverallDuration();
+//                    }
+//                    individual.setFitness(newFitness);
+
+                    // 2)更新individual
+                    individuals.set(individualIdx, individual);
+
+                    //                    // TODO test
+//                    if (route.getVehicle().getId()==8423){
+//                        System.out.println("car: "+vehicleStartTime+" ; "+new Date(vehicleStartTime));
+//                        System.out.println("rr: "+ route.getOverallDuration()+" ; "+new Date(route.getOverallDuration()));
+//                    }
+
+                    // 3)计算每个路线的overall duration time
+                    System.out.println("CAR: " + vehicleStartTime + " ; " + new Date(vehicleStartTime));
+                    System.out.println("ROUTE: " + route.getOverallDuration() + " ; " + new Date(route.getOverallDuration()));
+                    sum += (route.getOverallDuration() - vehicleStartTime);
+
+                    // 4)更新dto是否处理返回仓库的标记
                     dto.setReturned(true);
                 }
             }
+            System.out.println("总的：" + sum);
         }
+        // 3. 更新fitness
+        individuals.get(0).setFitness(sum / (1000.0 * 60 * 60)); // units: h
+        System.out.println("总的2： " + individuals.get(0).getFitness());
     }
 
     // 全局data，用于重新分配能成功分配的请求使用
@@ -6372,11 +6416,16 @@ public class AADS {
         for (Individual individual : individuals) {
             sum += individual.getFitness();
         }
-        population.setOverallFitness(sum / (60.0 * 60 * 1000));
+        population.setOverallFitness(sum);
 
         // 9. 给种群设置个体列表
         population.setIndividuals(individuals);
-        System.out.println("Overall fitness is :  " + population.getOverallFitness() + " hours");
+        System.out.println("Overall fitness:  " + population.getOverallFitness() + " hours");
+//        int num=0;
+//        for (Route route:population.getIndividuals().get(0).getRoutes()){
+//            if (route.getCustomers()!=null && !route.getCustomers().isEmpty()) num++;
+//        }
+//        System.out.println("总共使用："+num+"个路线");
         return population;
     }
 
@@ -6636,7 +6685,7 @@ public class AADS {
                 int seqR = 0; // control the sequenceNo of the tail
                 int seqCD = 1; // control the sequenceNo of collect and deliver jobs
                 for (int i = 0; i < timeList.size(); i++) {
-                    Time curTime = timeList.get(i);
+                    Time curTime = timeList.get(i); // obtain the i-th Time node
 //                    System.out.println("time: " + curTime);
 
                     // typesetting by job type
@@ -6772,9 +6821,15 @@ public class AADS {
                                         .append(formatDate(secondBreak.getEnd().getTime(), "HH:mm")).append(",")
                                         .append(formatDate(secondBreak.getDuration(), "H'h'm'm'")).append(",");
                             } else { // only one break
-                                if (secondBreak != null && secondBreak.getJobId().equals("break")) {
+                                if (firstBreak != null && secondBreak != null
+                                        && !firstBreak.getJobId().equals("break") && secondBreak.getJobId().equals("break")) {
                                     output.append(formatDate(secondBreak.getStart().getTime(), "HH:mm")).append(",")
                                             .append(formatDate(secondBreak.getDuration(), "H'h'm'm'")).append(",")
+                                            .append(",").append(",");
+                                } else if (firstBreak != null && secondBreak != null
+                                        && firstBreak.getJobId().equals("break") && !secondBreak.getJobId().equals("break")) {
+                                    output.append(formatDate(firstBreak.getStart().getTime(), "HH:mm")).append(",")
+                                            .append(formatDate(firstBreak.getDuration(), "H'h'm'm'")).append(",")
                                             .append(",").append(",");
                                 } else {
                                     output.append(",").append(",").append(",").append(","); // related BreakTime are zero
