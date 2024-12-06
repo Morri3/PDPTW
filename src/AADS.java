@@ -3537,65 +3537,66 @@ public class AADS {
             // 1. 驾驶4.5h，至少休息45min（分两段）
             if (driveTime >= 4.5 * 60 * 60 * 1000) {
 //                // TODO  尝试枚举判断30min/45min，选用用时更少的休息规则
-                if (breakTime < 45 * 60 * 1000) { // 休息45min
-                    breakTime += 15 * 60 * 1000; // take a 15-minute-break
-                    createTimeNode(getVehicle(),
-                            startTime,
-                            15 * 60 * 1000,
-                            "break",
-                            0,
-                            customer.getId(),
-                            "temp"); // 创建时间节点
-                    startTime += 15 * 60 * 1000; // for update
-                    breakTime += 30 * 60 * 1000; // then, take a 30-minute-break
-                    createTimeNode(getVehicle(),
-                            startTime,
-                            30 * 60 * 1000,
-                            "break",
-                            0,
-                            customer.getId(),
-                            "temp"); // 创建时间节点
-                    startTime += 30 * 60 * 1000; // for update
+//                if (breakTime < 45 * 60 * 1000) { // 休息45min
+                breakTime += 15 * 60 * 1000; // take a 15-minute-break
+                createTimeNode(getVehicle(),
+                        startTime,
+                        15 * 60 * 1000,
+                        "break",
+                        0,
+                        customer.getId(),
+                        "temp"); // 创建时间节点
+                startTime += 15 * 60 * 1000; // for update
+                breakTime += 30 * 60 * 1000; // then, take a 30-minute-break
+                createTimeNode(getVehicle(),
+                        startTime,
+                        30 * 60 * 1000,
+                        "break",
+                        0,
+                        customer.getId(),
+                        "temp"); // 创建时间节点
+                startTime += 30 * 60 * 1000; // for update
 //                    driveTime = 0; // 重置驾驶时间
-                    flag = true;
-                }
+                flag = true;
+//                }
             }
             // 2. 总工作时间6~9h，应休息30min，这里休息45min重置drive Time
             if (overallDuration >= 6 * 60 * 60 * 1000 && overallDuration < 9 * 60 * 60 * 1000) {
-                if (breakTime < 30 * 60 * 1000) {
+//                if (breakTime < 30 * 60 * 1000) {
 //                    breakTime += 30 * 60 * 1000;
-                    breakTime += 45 * 60 * 1000;
-                    createTimeNode(getVehicle(),
-                            startTime,
+                breakTime += 45 * 60 * 1000;
+                createTimeNode(getVehicle(),
+                        startTime,
 //                            30 * 60 * 1000,
-                            45 * 60 * 1000,
-                            "break",
-                            0,
-                            customer.getId(),
-                            "temp"); // 创建时间节点
+                        45 * 60 * 1000,
+                        "break",
+                        0,
+                        customer.getId(),
+                        "temp"); // 创建时间节点
 //                    startTime += 30 * 60 * 1000;
-                    startTime += 45 * 60 * 1000;
-                    flag = true;
-                }
+                startTime += 45 * 60 * 1000;
+                flag = true;
+//                }
             }
             // 3. 总工作时间超过9h，应休息45min
             if (overallDuration >= 9 * 60 * 60 * 1000) {
-                if (breakTime < 45 * 60 * 1000) {
-                    breakTime += 45 * 60 * 1000;
-                    createTimeNode(getVehicle(),
-                            startTime,
-                            45 * 60 * 1000,
-                            "break",
-                            0,
-                            customer.getId(),
-                            "temp"); // 创建时间节点
-                    startTime += 45 * 60 * 1000;
-                    flag = true;
-                }
+//                if (breakTime < 45 * 60 * 1000) {
+                breakTime += 45 * 60 * 1000;
+                createTimeNode(getVehicle(),
+                        startTime,
+                        45 * 60 * 1000,
+                        "break",
+                        0,
+                        customer.getId(),
+                        "temp"); // 创建时间节点
+                startTime += 45 * 60 * 1000;
+                flag = true;
+//                }
             }
             // 4. 重置drive time
-//            if ((breakTime-tmp)>=45 * 60 * 1000) driveTime=0;
-            if (flag) driveTime = 0;
+            if (flag) {
+                driveTime = 0;
+            }
             // 5. 返回更新后的时间数据
             res.add(breakTime); // first item
             res.add(driveTime); // second item
@@ -3825,7 +3826,7 @@ public class AADS {
                             System.out.println("!!!!!!wait and directly COLLECT!!"); // test
                             // 若需要等待直到取货时间窗口开放，则需要加上等待窗口开放的时间
                             long wait = Math.abs(customer.getCollectTimeWindow().getStart().getTime() - curTime);
-                            breakTime += wait;
+//                            breakTime += wait;
                             curTime += wait;
                             createTimeNode(getVehicle(),
                                     tmp,
@@ -3943,7 +3944,7 @@ public class AADS {
 
                             // 若需要等待直到取货时间窗口开放，则需要加上等待窗口开放的时间
                             long wait = Math.abs(customer.getCollectTimeWindow().getStart().getTime() - (curTime + collectRouteTime * 1000));
-                            breakTime += wait;
+//                            breakTime += wait;
                             curTime += wait;
                             createTimeNode(getVehicle(),
                                     tmp,
@@ -4136,7 +4137,7 @@ public class AADS {
 
                             // 若需要等待直到送货时间窗口开放，则需要加上等待窗口开放的时间
                             long wait = Math.abs(customer.getDeliverTimeWindow().getStart().getTime() - (curTime + deliverRouteTime * 1000));
-                            breakTime += wait;
+//                            breakTime += wait;
                             curTime += wait;
                             createTimeNode(getVehicle(),
                                     tmp,
@@ -4237,7 +4238,7 @@ public class AADS {
 //                            curTime += (customer.getDeliverTimeWindow().getStart().getTime() - curTime)
 //                                    + customer.getDeliverTimeinMinutes() * 60 * 1000;
                             long wait = (customer.getDeliverTimeWindow().getStart().getTime() - curTime);
-                            breakTime += wait;
+//                            breakTime += wait;
                             curTime += wait;
                             createTimeNode(getVehicle(),
                                     tmp,
@@ -4476,7 +4477,7 @@ public class AADS {
 //                        System.out.println("!!directly COLLECT!!"); // test
                         // 若需要等待直到取货时间窗口开放，则需要加上等待窗口开放的时间
                         long wait = Math.abs(customer.getCollectTimeWindow().getStart().getTime() - curTime);
-                        breakTime += wait;
+//                        breakTime += wait;
                         curTime += wait;
                         createTimeNode(getVehicle(),
                                 tmp,
@@ -4589,7 +4590,7 @@ public class AADS {
 
                         // 若需要等待直到取货时间窗口开放，则需要加上等待窗口开放的时间
                         long wait = Math.abs(customer.getCollectTimeWindow().getStart().getTime() - (curTime + collectRouteTime * 1000));
-                        breakTime += wait;
+//                        breakTime += wait;
                         curTime += wait;
                         createTimeNode(getVehicle(),
                                 tmp,
@@ -4743,7 +4744,7 @@ public class AADS {
 
                         // 若需要等待直到送货时间窗口开放，则需要加上等待窗口开放的时间
                         long wait = Math.abs(customer.getDeliverTimeWindow().getStart().getTime() - (curTime + deliverRouteTime * 1000));
-                        breakTime += wait;
+//                        breakTime += wait;
                         curTime += wait;
                         createTimeNode(getVehicle(),
                                 tmp,
@@ -6618,7 +6619,7 @@ public class AADS {
                     "DelayTime,ServiceTime,DepartureTime,Break1Time,Break1Duration," +
                     "Break2Time,Break2Duration,Distance,SequenceNo");
 
-            List<Long> cusId = new ArrayList<>();
+//            List<Long> cusId = new ArrayList<>();
 
             // 2. get time nodes from each route
             for (Route route : bestIndividual.getRoutes()) {
@@ -6639,25 +6640,26 @@ public class AADS {
                 timeList.addAll(waitTimeList);
                 timeList.addAll(delayTimeList);
 
-                // 3)将timeList按照customerId分组（使用java8的stream API）
-                Map<Long, List<Time>> group = timeList.stream()
-                        .collect(Collectors.groupingBy(Time::getCustomerId));
-
-                // 4)遍历每个分组，其中eachTimeList是当前路线的每个请求所在分组
-                List<Time> processedTimeList = new ArrayList<>(); // 存放最终的数据
-                group.forEach((customerId, eachTimeList) -> {
-                    boolean isCollected = false, isDelivered = false; // 判断是否只有collect/deliver
-                    for (Time time : eachTimeList) {
-                        if (time.getJobId().contains("C-")) isCollected = true;
-                        if (time.getJobId().contains("D-")) isDelivered = true;
-                    }
-                    if (isCollected && isDelivered) { // 某个customer在某个路线中同时被collect、deliver，表明该请求在该路线中成功分配
-                        processedTimeList.addAll(eachTimeList); // 加入列表
-                        cusId.add(customerId); // test
-                    }
-                });
-                timeList = processedTimeList; // 赋值处理后的timeList
-//                System.out.println("TimeList: " + timeList);
+                // TODo 1206 1953注释
+//                // 3)将timeList按照customerId分组（使用java8的stream API）
+//                Map<Long, List<Time>> group = timeList.stream()
+//                        .collect(Collectors.groupingBy(Time::getCustomerId));
+//
+//                // 4)遍历每个分组，其中eachTimeList是当前路线的每个请求所在分组
+//                List<Time> processedTimeList = new ArrayList<>(); // 存放最终的数据
+//                group.forEach((customerId, eachTimeList) -> {
+//                    boolean isCollected = false, isDelivered = false; // 判断是否只有collect/deliver
+//                    for (Time time : eachTimeList) {
+//                        if (time.getJobId().contains("C-")) isCollected = true;
+//                        if (time.getJobId().contains("D-")) isDelivered = true;
+//                    }
+//                    if (isCollected && isDelivered) { // 某个customer在某个路线中同时被collect、deliver，表明该请求在该路线中成功分配
+//                        processedTimeList.addAll(eachTimeList); // 加入列表
+//                        cusId.add(customerId); // test
+//                    }
+//                });
+//                timeList = processedTimeList; // 赋值处理后的timeList
+////                System.out.println("TimeList: " + timeList);
 
                 // 5)sort the integrated list
                 timeList.sort((o1, o2) -> Long.compare(o1.getId(), o2.getId()));
@@ -6686,21 +6688,43 @@ public class AADS {
                 int seqCD = 1; // control the sequenceNo of collect and deliver jobs
                 for (int i = 0; i < timeList.size(); i++) {
                     Time curTime = timeList.get(i); // obtain the i-th Time node
-//                    System.out.println("time: " + curTime);
+                    System.out.println("time: " + curTime);
 
                     // typesetting by job type
-                    if (curTime.getJobId().equals("return")) {
-                        // return to the depot
+                    if (curTime.getJobId().equals("return")) { // return to the depot
                         output.append(vehicleId).append(","); // VehicleName
                         output.append("Vehicle ").append(vehicleId).append(" end").append(","); // JobId
                         output.append(formatDate(curTime.getDuration(), "H'h'm'm'")).append(","); // JourneyTime
-                        output.append(formatDate(curTime.getEnd().getTime(), "HH:mm")).append(","); // ArrivalTime(the end time of 'return' entity)
+                        output.append(formatDate(curTime.getEnd().getTime(), "HH:mm")).append(","); // ArrivalTime (the time to return to the start site)
                         output.append(formatDate(0, "H'h'm'm'")).append(","); // WaitTime equals zero
                         output.append(formatDate(0, "H'h'm'm'")).append(","); // DelayTime equals zero
                         output.append(formatDate(0, "H'h'm'm'")).append(","); // ServiceTime equals zero
-                        output.append(formatDate(curTime.getEnd().getTime(), "extract")).append(","); // DepartureTime equals to ArrivalTime
-                        output.append(",").append(",").append(",").append(","); // related BreakTime are zero
-                        output.append(curTime.getDistance()).append(","); // Distance
+                        output.append(formatDate(curTime.getEnd().getTime(), "extract")).append(","); // DepartureTime
+                        // BreakTime
+                        if (i > 2) {
+                            Time firstTime = timeList.get(i - 2);
+                            Time secondTime = timeList.get(i - 1);
+                            if (firstTime != null && secondTime != null
+                                    && firstTime.getJobId().equals("break") && secondTime.getJobId().equals("break")) { // two breaks
+                                output.append(formatDate(firstTime.getStart().getTime(), "HH:mm")).append(",")
+                                        .append(formatDate(firstTime.getDuration(), "H'h'm'm'")).append(",")
+                                        .append(formatDate(secondTime.getEnd().getTime(), "HH:mm")).append(",")
+                                        .append(formatDate(secondTime.getDuration(), "H'h'm'm'")).append(",");
+                            } else { // only one break
+                                if (firstTime != null && secondTime != null
+                                        && !firstTime.getJobId().equals("break") && secondTime.getJobId().equals("break")) {
+                                    output.append(formatDate(secondTime.getStart().getTime(), "HH:mm")).append(",")
+                                            .append(formatDate(secondTime.getDuration(), "H'h'm'm'")).append(",")
+                                            .append(",").append(",");
+                                } else {
+                                    output.append(",").append(",").append(",").append(","); // related BreakTime are zero
+                                }
+                            }
+                        } else {
+                            output.append(",").append(",").append(",").append(","); // related BreakTime are zero
+                        }
+                        // Distance
+                        output.append(curTime.getDistance()).append(",");
                         output.append(seqR + 2); // SequenceNo, j+2 means existing the head and tail
                     } else if (!curTime.getJobId().equals("drive") && !curTime.getJobId().equals("wait")
                             && !curTime.getJobId().equals("delay") && !curTime.getJobId().equals("break")) {
