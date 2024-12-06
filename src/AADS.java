@@ -7,6 +7,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class AADS {
     /* classes and interface for JSON parser */
@@ -4495,8 +4496,7 @@ public class AADS {
                     } else {
                         // 不满足时间窗口约束
                         System.out.println("The vehicle " + getVehicle().getId() +
-                                " should arrive between the collect time window.");
-//                        return false;
+                                " should arrive between the collect time window." + " cus: " + customer.getId());
                         return new InnerTuple<>(false, new GlobalData());
                     }
 
@@ -4629,8 +4629,7 @@ public class AADS {
                     } else {
                         // 不满足时间窗口约束
                         System.out.println("The vehicle " + getVehicle().getId() +
-                                " should arrive between the collect time window.");
-//                        return false;
+                                " should arrive between the collect time window." + " cus: " + customer.getId());
                         return new InnerTuple<>(false, new GlobalData());
                     }
 
@@ -4780,8 +4779,7 @@ public class AADS {
                     } else {
                         // 不满足时间窗口约束
                         System.out.println("The vehicle " + getVehicle().getId() +
-                                " should arrive between the deliver time window.");
-//                        return false;
+                                " should arrive between the deliver time window." + " cus: " + customer.getId());
                         return new InnerTuple<>(false, new GlobalData());
                     }
 
@@ -4856,6 +4854,20 @@ public class AADS {
 
                 // 11. 标记为已送货
                 customer.setDelivered(true);
+
+                // 当前请求加入全局列表 TODO 1206 1248添加
+//                    assignedCustomer.add(customer);
+                List<Customer> customerList = assignedCustomer.get(getId());
+                if (customerList != null) { // 有元素，则添加
+                    customerList.add(customer);
+                    assignedCustomer.put(getId(), customerList);
+                } else { // 没元素，则新建列表
+                    List<Customer> newList = new ArrayList<>();
+                    newList.add(customer);
+                    assignedCustomer.put(getId(), newList);
+                }
+
+                System.out.println("cus: " + customer.getId() + " can.");
             } else {
                 System.out.println("Please ensure that the new request is valid.");
                 return new InnerTuple<>(true, new GlobalData());
@@ -4863,7 +4875,8 @@ public class AADS {
             return res;
         }
 
-        public long addACustomer(Customer customer, PreProcessData data, GlobalData globalData, boolean collectFirst) {
+        public long addACustomer(Customer customer, PreProcessData data, GlobalData globalData,
+                                 boolean collectFirst, String type) {
             if (customer != null) {
                 // 1. 获取数据
                 long curTime = data.getCurTime();
@@ -4892,6 +4905,18 @@ public class AADS {
 
                 // 2. 添加请求customer
                 getCustomers().add(customer);
+
+                if (type.equals("combination")) {
+                    for (Entry<Long, List<Customer>> entry : assignedCustomer.entrySet()) {
+                        long routeIdx = entry.getKey(); // obtain the index of each route
+//                        System.out.println("rid: " + routeIdx);
+                        List<Customer> customerList = entry.getValue();
+//                        System.out.println("cusList: "+customerList.toString());
+                        for (Customer c : customerList) {
+                            if (!c.isDelivered()) System.out.println("999");
+                        }
+                    }
+                }
 
                 // 3. 每执行addCustomer，就创建Time节点，创建后将全局列表tmpTimeList清零
                 List<Time> timeList = tmpTimeList;
@@ -5583,7 +5608,6 @@ public class AADS {
             List<Individual> individuals, PreProcessData data, boolean method,
             Map<Integer, SucCustomerDto> sucCustomers, List<Customer> customerList) {
         Tuple<List<Individual>, Map<Integer, SucCustomerDto>> res;
-        System.out.println("测试：" + sucCustomers.toString());
         Map<Integer, SucCustomerDto> tmp = sucCustomers; // TODO 1204 1949注释
 //        Map<Integer, SucCustomerDto> tmp = new HashMap<>();
 
@@ -5610,10 +5634,6 @@ public class AADS {
 
                 for (Individual individual : individuals) {
                     for (Route r : individual.getRoutes()) {
-//                for (int i = 0; i < individuals.size(); i++) {
-//                    Individual individual = individuals.get(i);
-//                    for (int j = 0; j < individual.getRoutes().size(); j++) {
-//                        Route r = individual.getRoutes().get(j);
                         Tuple<Boolean, GlobalData> canAdd = r.canAddACustomerBySeparation(customer, data, true);
                         System.out.println("Can add this customer?? " + canAdd.getFirst());
                         if (canAdd != null && canAdd.getFirst()) {
@@ -5632,13 +5652,12 @@ public class AADS {
                                 System.out.println("取货cost<min内的routeIdx：" + routeIdx + "; \nroute: " + bestRoute);
                                 globalData = canAdd.getSecond();
                             }
-//                            globalData = canAdd.getSecond();
                         }
                     }
                 }
 
                 if (bestRoute != null) {
-                    long routeId = bestRoute.addACustomer(customer, data, globalData, true);
+                    long routeId = bestRoute.addACustomer(customer, data, globalData, true, "separation");
                     if (routeId == -1) {
                         unassignedCustomer.add(customer);
                     } else {
@@ -5686,7 +5705,6 @@ public class AADS {
                             Tuple<Boolean, GlobalData> canAdd = r.canAddACustomerBySeparation(customer, data, false);
                             if (canAdd != null && canAdd.getFirst()) {
                                 long cost = canAdd.getSecond().getCurTime();
-//                            long cost = r.computeCost(customer, data);
                                 System.out.println("The cost of this route::！ " + cost);
                                 System.out.println("min cost::！ " + min);
                                 if (cost < min) {
@@ -5698,7 +5716,6 @@ public class AADS {
                                     individualIdx = individuals.indexOf(individual);
 //                                routeIdx = individual.getRoutes().indexOf(bestRoute);
                                     routeIdx = (int) bestRoute.getId();
-                                    System.out.println("min cost::！！ " + min);
                                     System.out.println("送货cost<min内的routeIdx：" + routeIdx + "; \nroute: " + bestRoute);
                                     globalData = canAdd.getSecond();
                                 }
@@ -5708,7 +5725,7 @@ public class AADS {
                 }
 
                 if (bestRoute != null) {
-                    long routeId = bestRoute.addACustomer(customer, data, globalData, false);
+                    long routeId = bestRoute.addACustomer(customer, data, globalData, false, "separation");
                     if (routeId == -1) {
                         unassignedCustomer.add(customer);
                     } else {
@@ -5730,200 +5747,133 @@ public class AADS {
             }
         } else { // 以订单为单位,遍历所有请求Customer，为当前请求Customer分配一辆新车Vehicle，并为该车临时初始化一条新路线Route
             // 1. 遍历每个个体的路线
-            for (Individual individual : individuals) {
-                for (Route route : individual.getRoutes()) {
-                    long min = Long.MAX_VALUE; // 设为最大值
-                    Customer bestCustomer = null;
-                    GlobalData globalData = new GlobalData();
+            // TODO 1206 1107注释👇可运行的代码
+//            for (Individual individual : individuals) {
+//                for (Route route : individual.getRoutes()) {
+//                    long min = Long.MAX_VALUE; // 设为最大值
+//                    Customer bestCustomer = null;
+//                    GlobalData globalData = new GlobalData();
+////                    if (customerList.isEmpty() || customerList.size()==0) break;
+//                    // 遍历请求列表
+//                    for (Customer customer : customerList) {
+//                        if (customer != null && customer.isDelivered()) continue; // 若已送货，则跳过当前订单
+//
+//                        Tuple<Boolean, GlobalData> canAdd = route.canAddACustomerByCombination(customer, data); // 在Route中检查是否满足约束，并计算成本
+////                        System.out.println("Can add this customer? " + canAdd.getFirst());
+//                        boolean flag = canAdd.getFirst();
+//                        if (canAdd != null && canAdd.getFirst()) {
+//                            // 能分配
+//                            long cost = canAdd.getSecond().getCurTime();
+////                            System.out.println("The cost of this route: " + cost);
+//                            if (cost < min) {
+//                                // 更新最小值
+//                                min = cost;
+//                                bestCustomer = customer;
+//                                globalData = canAdd.getSecond();
+//                                // 标记为可以分配
+//                                flag = true;
+//                            }
+//                        }
+//                        // 找到能插入的请求就退出循环
+//                        if (flag) break;
+//                    }
+//
+//                    // 找到成本最低的分配路线
+//                    if (bestCustomer != null) {
+//                        long routeId = route.addACustomer(bestCustomer, data, globalData, false); // 这里设为false
+//                        if (routeId == -1) {
+//                            unassignedCustomer.add(bestCustomer);
+//                        } else {
+//                            // 1. 更新
+//                            double newFitness = route.getOverallDuration() / (1000 * 60 * 60.0);
+//                            individual.setFitness(newFitness); // fitness
+//                            List<Route> rawRoutes = individual.getRoutes();
+//                            rawRoutes.set((int) routeId, route);
+//                            individual.setRoutes(rawRoutes); // 更新route
+//                            individuals.set(individuals.indexOf(individual), individual); // 更新individual
+//                            // 2. 构造DTO加入列表
+//                            SucCustomerDto dto = new SucCustomerDto(bestCustomer, individual, route, individuals.indexOf(individual), (int) routeId, globalData, false);
+//                            tmp.put((int) route.getId(), dto);
+//                            // 3. 标记为已送货
+//                            bestCustomer.setDelivered(true);
+////                            // 4. 执行返程  TODO  1206 0109临时注释
+////                            addReturnRoute(tmp, data, individuals);
+//                        }
+//                    } else {
+//                        System.out.println("这里吗");
+////                        unassignedCustomer.add(bestCustomer);
+//                    }
+//                }
+//            }
+            // TODO 1206 1107注释↑可运行的代码
 
-//                    if (customerList.isEmpty() || customerList.size()==0) break;
-                    // 遍历请求列表
-                    for (Customer customer : customerList) {
-                        if (customer != null && customer.isDelivered()) continue; // 若已送货，则跳过当前订单
+            for (Customer customer : customerList) {
+                long min = Long.MAX_VALUE;
+                Route bestRoute = null;
+                Individual bestIndividual = null;
+                int routeIdx = -1, individualIdx = -1;
+                GlobalData globalData = new GlobalData();
+                boolean flag = false; // 判断是否成功分配
 
-                        Tuple<Boolean, GlobalData> canAdd = route.canAddACustomerByCombination(customer, data); // 在Route中检查是否满足约束，并计算成本
-//                        System.out.println("Can add this customer? " + canAdd.getFirst());
-                        boolean flag = canAdd.getFirst();
+                for (Individual individual : individuals) {
+                    for (Route r : individual.getRoutes()) {
+                        if (customer!=null && customer.isDelivered()) continue; // 若已被分配，则跳过
+
+                        Tuple<Boolean, GlobalData> canAdd = r.canAddACustomerByCombination(customer, data);
+//                        System.out.println("cus: " + customer.getId() + " " + canAdd.getFirst());
                         if (canAdd != null && canAdd.getFirst()) {
-                            // 能分配
                             long cost = canAdd.getSecond().getCurTime();
-//                            System.out.println("The cost of this route: " + cost);
+                            System.out.println("The cost of this route::！ " + cost);
+                            System.out.println("min cost::！ " + min);
                             if (cost < min) {
-                                // 更新最小值
                                 min = cost;
-                                bestCustomer = customer;
+                                bestRoute = r;
+                                bestIndividual = individual;
+//                                individualIdx = i;
+//                                routeIdx = j;
+                                individualIdx = individuals.indexOf(individual);
+//                                routeIdx = individual.getRoutes().indexOf(bestRoute);
+                                routeIdx = (int) bestRoute.getId();
+                                System.out.println("送货cost<min内的routeIdx：" + routeIdx + "; \nroute: " + bestRoute);
                                 globalData = canAdd.getSecond();
-                                // 标记为可以分配
+                                // 成功分配
                                 flag = true;
                             }
-                        }
-                        // 找到能插入的请求就退出循环
-                        if (flag) break;
-                    }
-
-                    // 找到成本最低的分配路线
-                    if (bestCustomer != null) {
-                        long routeId = route.addACustomer(bestCustomer, data, globalData, false); // 这里设为false
-                        if (routeId == -1) {
-                            unassignedCustomer.add(bestCustomer);
                         } else {
-                            // 1. 更新
-                            double newFitness = route.getOverallDuration() / (1000 * 60 * 60.0);
-                            individual.setFitness(newFitness); // fitness
-                            List<Route> rawRoutes = individual.getRoutes();
-                            rawRoutes.set((int) routeId, route);
-                            individual.setRoutes(rawRoutes); // 更新route
-                            individuals.set(individuals.indexOf(individual), individual); // 更新individual
-                            // 2. 构造DTO加入列表
-                            SucCustomerDto dto = new SucCustomerDto(bestCustomer, individual, route, individuals.indexOf(individual), (int) routeId, globalData, false);
-                            tmp.put((int) route.getId(), dto);
-                            // 3. 标记为已送货
-                            bestCustomer.setDelivered(true);
-//                            // 4. 执行返程  TODO  1206 0109临时注释
-//                            addReturnRoute(tmp, data, individuals);
+                            System.out.println("这？？");
                         }
-                    } else {
-//                        unassignedCustomer.add(bestCustomer);
+//                        }
                     }
                 }
+
+                if (!flag) { // 不能成功分配，加入unassignedCustomer
+//                    System.out.println("不能分配：" + customer.getId());
+                    unassignedCustomer.add(customer);
+                    continue;
+                }
+
+                if (bestRoute != null) {
+                    long routeId = bestRoute.addACustomer(customer, data, globalData, false, "combination");
+                    if (routeId == -1) {
+                        unassignedCustomer.add(customer);
+                    } else {
+                        // 构造DTO加入列表
+                        SucCustomerDto dto = new SucCustomerDto(customer, bestIndividual, bestRoute, individualIdx, routeIdx, globalData, false);
+//                                sucCustomers.put(routeIdx, dto);
+                        tmp.put((int) bestRoute.getId(), dto);
+                        // 更新
+                        double newFitness = bestRoute.getOverallDuration() / (1000 * 60 * 60.0);
+                        bestIndividual.setFitness(newFitness);
+                        List<Route> rawRoutes = bestIndividual.getRoutes();
+                        rawRoutes.set(routeIdx, bestRoute);
+                        bestIndividual.setRoutes(rawRoutes);
+                        individuals.set(individualIdx, bestIndividual);
+                    }
+                } else {
+                    System.out.println("????");
+//                    unassignedCustomer.add(customer);
+                }
             }
-
-            // TODO  1204 1623注释
-//            for (Customer customer:customerList){
-//                long min = Long.MAX_VALUE; // 设为最大值
-//                Route bestRoute = null;
-//                Individual bestIndividual = null;
-//                int routeIdx = -1, individualIdx = -1; // 最优路线/个体的下标
-//                GlobalData globalData = new GlobalData();
-//
-//                // 遍历所有个体的所有路线
-//                for (Individual individual:individuals) {
-//                    for (Route route:individual.getRoutes()) {
-//                        Tuple<Boolean, GlobalData> canAdd = route.canAddACustomerByCombination(customer, data); // 在Route中检查是否满足约束，并计算成本
-////                        System.out.println("Can add this customer? " + canAdd.getFirst());
-//                        if (canAdd != null && canAdd.getFirst()) {
-//                            // 能添加
-////                            long cost = r.computeCost(customer, data); // 计算成本
-//                            long cost = canAdd.getSecond().getCurTime();
-////                            System.out.println("The cost of this route: " + cost);
-//                            if (cost < min) {
-//                                // 更新最小值
-//                                min = cost;
-//                                bestRoute = route;
-//                                bestIndividual = individual;
-////                                individualIdx = i;
-////                                routeIdx = j;
-//                                individualIdx = individuals.indexOf(individual);
-////                                routeIdx = individual.getRoutes().indexOf(bestRoute);
-//                                routeIdx = (int) bestRoute.getId();
-//                                globalData = canAdd.getSecond();
-//
-////                                // 构造DTO加入列表
-////                                SucCustomerDto dto = new SucCustomerDto(customer, bestIndividual, bestRoute, individualIdx, routeIdx, globalData, false);
-////                                sucCustomers.put(routeIdx, dto);
-////                                System.out.println("dto0： "+dto.toString());
-//                            }
-////                            globalData = canAdd.getSecond();
-//                            // TODO  20241201 1025 正在弄若返程错误，则不add这个customer
-//                        }
-//
-//                    }
-//                }
-//
-//                // 找到成本最低的分配路线
-//                if (bestRoute != null) {
-//                    long routeId = bestRoute.addACustomer(customer, data, globalData, false); // 这里设为false
-//                    if (routeId == -1) {
-//                        unassignedCustomer.add(customer);
-//                    } else {
-//                        // 构造DTO加入列表
-//                        SucCustomerDto dto = new SucCustomerDto(customer, bestIndividual, bestRoute, individualIdx, (int) routeId, globalData, false);
-//                        tmp.put((int) routeId, dto);
-//                        // 更新
-////                    System.out.println("bestIndividual.getFitness(): "+bestIndividual.getFitness());
-////                    System.out.println("bestRoute.getOverallDuration(): "+bestRoute.getOverallDuration());
-////                    double newFitness = bestIndividual.getFitness() + bestRoute.getOverallDuration();
-//                        double newFitness = bestRoute.getOverallDuration() / (1000 * 60 * 60.0);
-//                        bestIndividual.setFitness(newFitness); // fitness
-//                        List<Route> rawRoutes = bestIndividual.getRoutes();
-//                        rawRoutes.set(routeIdx, bestRoute);
-//                        bestIndividual.setRoutes(rawRoutes); // 更新route
-//                        individuals.set(individualIdx, bestIndividual); // 更新individual
-//                    }
-//                    // TODO  20241130 1310尝试在循环外addACustomer
-//                } else {
-//                    unassignedCustomer.add(customer);
-//                }
-//            }
-
-            // TODO 1204 1608注释↓
-//            for (Customer customer:customerList){
-//                long min = Long.MAX_VALUE; // 设为最大值
-//                Route bestRoute = null;
-//                Individual bestIndividual = null;
-//                int routeIdx = -1, individualIdx = -1; // 最优路线/个体的下标
-//                GlobalData globalData = new GlobalData();
-//
-//                // 遍历所有个体的所有路线
-//                for (Individual individual:individuals) {
-//                    for (Route route:individual.getRoutes()) {
-//                        Tuple<Boolean, GlobalData> canAdd = route.canAddACustomerByCombination(customer, data); // 在Route中检查是否满足约束，并计算成本
-////                        System.out.println("Can add this customer? " + canAdd.getFirst());
-//                        if (canAdd != null && canAdd.getFirst()) {
-//                            // 能添加
-////                            long cost = r.computeCost(customer, data); // 计算成本
-//                            long cost = canAdd.getSecond().getCurTime();
-////                            System.out.println("The cost of this route: " + cost);
-//                            if (cost < min) {
-//                                // 更新最小值
-//                                min = cost;
-//                                bestRoute = route;
-//                                bestIndividual = individual;
-////                                individualIdx = i;
-////                                routeIdx = j;
-//                                individualIdx = individuals.indexOf(individual);
-////                                routeIdx = individual.getRoutes().indexOf(bestRoute);
-//                                routeIdx = (int) bestRoute.getId();
-//                                globalData = canAdd.getSecond();
-//
-////                                // 构造DTO加入列表
-////                                SucCustomerDto dto = new SucCustomerDto(customer, bestIndividual, bestRoute, individualIdx, routeIdx, globalData, false);
-////                                sucCustomers.put(routeIdx, dto);
-////                                System.out.println("dto0： "+dto.toString());
-//                            }
-////                            globalData = canAdd.getSecond();
-//                            // TODO  20241201 1025 正在弄若返程错误，则不add这个customer
-//                        }
-//
-//                    }
-//                }
-//
-//                // 找到成本最低的分配路线
-//                if (bestRoute != null) {
-//                    long routeId = bestRoute.addACustomer(customer, data, globalData, false); // 这里设为false
-//                    if (routeId == -1) {
-//                        unassignedCustomer.add(customer);
-//                    } else {
-//                        // 构造DTO加入列表
-//                        SucCustomerDto dto = new SucCustomerDto(customer, bestIndividual, bestRoute, individualIdx, (int) routeId, globalData, false);
-//                        tmp.put((int) routeId, dto);
-//                        // 更新
-////                    System.out.println("bestIndividual.getFitness(): "+bestIndividual.getFitness());
-////                    System.out.println("bestRoute.getOverallDuration(): "+bestRoute.getOverallDuration());
-////                    double newFitness = bestIndividual.getFitness() + bestRoute.getOverallDuration();
-//                        double newFitness = bestRoute.getOverallDuration() / (1000 * 60 * 60.0);
-//                        bestIndividual.setFitness(newFitness); // fitness
-//                        List<Route> rawRoutes = bestIndividual.getRoutes();
-//                        rawRoutes.set(routeIdx, bestRoute);
-//                        bestIndividual.setRoutes(rawRoutes); // 更新route
-//                        individuals.set(individualIdx, bestIndividual); // 更新individual
-//                    }
-//                    // TODO  20241130 1310尝试在循环外addACustomer
-//                } else {
-//                    unassignedCustomer.add(customer);
-//                }
-//            }
-
 //            // 执行每条路线的返程  TODO  1206 0132
 //            System.out.println("SuC: " + sucCustomers.keySet());
 //            System.out.println("SS: "+sucCustomers.get(45).getRoute().getCustomers().toString());
@@ -6096,6 +6046,19 @@ public class AADS {
         Map<Integer, SucCustomerDto> sucCustomers = new HashMap<>(); // 存放能成功添加的元素,key=routeId,value=DTO
         boolean method = random.nextBoolean();
 
+//        // 3. 先获取70%的customer，进行分配（大数据量测试集）
+//        int initialSize = (int) Math.ceil(data.getCustomerList().size() * 0.7);
+//        List<Customer> initialCustomerList=new ArrayList<>(); // 初始请求列表
+//        List<Customer> extraCustomerList=new ArrayList<>(); // 其他请求列表
+//        for (int i=0;i<initialSize;i++){
+//            initialCustomerList.add(data.getCustomerList().get(i));
+//        }
+//        for (int i=initialSize;i<data.getCustomerList().size();i++){
+//            extraCustomerList.add(data.getCustomerList().get(i));
+//        }
+////        System.out.println("initial size: "+initialCustomerList.size()+"\n content: "+initialCustomerList.toString());
+////        System.out.println("extra size: "+extraCustomerList.size()+"\n content: "+extraCustomerList.toString());
+
         // 4. 对于每个要插入的请求，检查当前（部分）解决方案中所有现有路线的所有可行插入点
         //      测试路线中取货和送货节点的所有可能插入位置，同时考虑优先级、容量和时间约束
         Tuple<List<Individual>, Map<Integer, SucCustomerDto>> res;
@@ -6106,7 +6069,6 @@ public class AADS {
                 individuals = res.getFirst(); // individual list
                 sucCustomers = res.getSecond(); // successful customers TODO 1206 0853添加
             }
-//            System.out.println("个数："+sucCustomers.size());
 
 //            // 2)更新种群的总fitness
 //            double sum = 0.0;
@@ -6127,12 +6089,10 @@ public class AADS {
             }
         }
 //        System.out.println("individuals: " + individuals);
-        System.out.println("分配后获得的sucCustomers: " + sucCustomers);
+//        System.out.println("分配后获得的sucCustomers: " + sucCustomers);
 //        System.out.println("unassigned: " + unassignedCustomer);
 
-        // TODO  处理unassignedCustomer
-        // TODO  20241202 1440 尝试把unassigned 的车辆分配给其他车，如果只有一辆车，则新增一辆
-        // 5. 把unassigned 的车辆分配给其他车，如果只有一辆车，则新增一辆
+        // 5. 处理unassignedCustomer，把unassigned 的车辆分配给其他车，如果只有一辆车，则新增一辆
         if (!unassignedCustomer.isEmpty()) {
             List<Customer> rewritableList = new CopyOnWriteArrayList<>(); // 用于重新分配成功分配的请求
             List<Integer> routeIdxs = new ArrayList<>(); // 存放要被移除的routeIdx
@@ -6404,17 +6364,17 @@ public class AADS {
 //            // TODO 1203 1327 临时注释  处理未分配的请求👆
             // TODO 1204 0028 临时注释  处理多车辆👆
         }
-//        System.out.println("两个路线的sucCustomers：" + sucCustomers.toString());
+//        System.out.println("sucCustomers：" + sucCustomers.toString());
         System.out.println("unassignedCustomer: " + unassignedCustomer.toString());
 
-        // 9. 更新种群的总fitness
+        // 8. 更新种群的总fitness
         double sum = 0.0;
         for (Individual individual : individuals) {
             sum += individual.getFitness();
         }
         population.setOverallFitness(sum / (60.0 * 60 * 1000));
 
-        // 10. 给种群设置个体列表
+        // 9. 给种群设置个体列表
         population.setIndividuals(individuals);
         System.out.println("Overall fitness is :  " + population.getOverallFitness() + " hours");
         return population;
@@ -6533,12 +6493,11 @@ public class AADS {
          * 适应度值：交付所有订单所需的总工作时间
          */
         // 1. parameters
-        // TODO  暂时修改为1
         int nPop = 1; // size of population(number of individuals in the population)
         double pCross = 1.0; // 交叉概率
         double pMut = 0.5; // 变异概率
-        int nMax = 15000; // maximum number of individual
-        int nMaxWithoutImprovement = 3000; // unimproved maximum number of individual
+        int nMax = 15000; // maximum number of individual (原文15000)
+        int nMaxWithoutImprovement = 3000; // unimproved maximum number of individual (原文3000)
         Individual bestIndividual = new Individual(); // best individual
 
         // 2. 初始化种群P
@@ -6548,7 +6507,7 @@ public class AADS {
         int termination = 0; // 终止条件
 
         // 4. 只要未满足终止条件，就循环
-//        while (termination <= nMaxWithoutImprovement) {
+        while (termination <= nMaxWithoutImprovement) {
 //            // 1)选择: 根据适应度值，从P选择一对个体x、y作为parents
 //            List<Individual> parents = selection(data, population);
 //            Individual x = new Individual(), y = new Individual();
@@ -6568,9 +6527,9 @@ public class AADS {
 //            // 4)更新种群P: 将x''和y''插入P，并相应地从P中移除两个最差的个体
 ////            updatePopulation();
 //
-//            // 5)更新终止条件的值
-//            termination++;
-//        }
+            // 5)更新终止条件的值
+            termination++;
+        }
 
         // 5. 从种群P中返回最佳个体作为解
         bestIndividual = population.getIndividuals().get(0); // 默认返回第一个个体作为最佳个体
@@ -6601,26 +6560,29 @@ public class AADS {
 
     protected static void getOutput(Individual bestIndividual) throws ParseException {
         if (bestIndividual != null) {
-            System.out.println("Best Individual: " + bestIndividual + ";\n route size: "
-                    + bestIndividual.getRoutes().size());
+//            System.out.println("Best individual: " + bestIndividual + ";\n route size: "
+//                    + bestIndividual.getRoutes().size());
+            System.out.println("Best individual's route size: " + bestIndividual.getRoutes().size());
 
             // 1. output the header of the table
             System.out.println("VehicleName,JobId,JourneyTime,ArrivalTime,WaitTime," +
                     "DelayTime,ServiceTime,DepartureTime,Break1Time,Break1Duration," +
                     "Break2Time,Break2Duration,Distance,SequenceNo");
 
-            // 2. get each route and process
+            List<Long> cusId = new ArrayList<>();
+
+            // 2. get time nodes from each route
             for (Route route : bestIndividual.getRoutes()) {
                 StringBuilder output = new StringBuilder(); // final output
 
-                // 1) get three time list respectively
+                // 1)get five time lists
                 List<Time> driveTimeList = route.getVehicle().getDriveTimeList();
                 List<Time> otherTimeList = route.getVehicle().getOtherTimeList();
                 List<Time> breakTimeList = route.getVehicle().getBreakTimeList();
                 List<Time> waitTimeList = route.getVehicle().getWaitTimeList();
                 List<Time> delayTimeList = route.getVehicle().getDelayTimeList();
 
-                // 2)integrate three lists into one
+                // 2)integrate five lists into one
                 List<Time> timeList = new ArrayList<>();
                 timeList.addAll(driveTimeList);
                 timeList.addAll(otherTimeList);
@@ -6628,36 +6590,54 @@ public class AADS {
                 timeList.addAll(waitTimeList);
                 timeList.addAll(delayTimeList);
 
-                // 3)sort the integrated list
+                // 3)将timeList按照customerId分组（使用java8的stream API）
+                Map<Long, List<Time>> group = timeList.stream()
+                        .collect(Collectors.groupingBy(Time::getCustomerId));
+
+                // 4)遍历每个分组，其中eachTimeList是当前路线的每个请求所在分组
+                List<Time> processedTimeList = new ArrayList<>(); // 存放最终的数据
+                group.forEach((customerId, eachTimeList) -> {
+                    boolean isCollected = false, isDelivered = false; // 判断是否只有collect/deliver
+                    for (Time time : eachTimeList) {
+                        if (time.getJobId().contains("C-")) isCollected = true;
+                        if (time.getJobId().contains("D-")) isDelivered = true;
+                    }
+                    if (isCollected && isDelivered) { // 某个customer在某个路线中同时被collect、deliver，表明该请求在该路线中成功分配
+                        processedTimeList.addAll(eachTimeList); // 加入列表
+                        cusId.add(customerId); // test
+                    }
+                });
+                timeList = processedTimeList; // 赋值处理后的timeList
+//                System.out.println("TimeList: " + timeList);
+
+                // 5)sort the integrated list
                 timeList.sort((o1, o2) -> Long.compare(o1.getId(), o2.getId()));
 
-                // 4)get the id of vehicle
+                // 6)get the id of vehicle
 //                long vehicleId = route.getVehicle().getId();
                 if (timeList.isEmpty()) continue; // jump to next route
                 long vehicleId = timeList.get(0).getVehicleId();
 
-                // 5)add the first line
+                // 7)add the first line
 //                Time firstTime = timeList.get(0); // first time entity
                 output.append(vehicleId).append(","); // VehicleName
                 output.append("Vehicle ").append(vehicleId).append(" start").append(","); // JobId
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // JourneyTime
-//                output.append(formatDate(firstTime.getStart().getTime(), "HH:mm")).append(","); // ArrivalTime(First job's start time)
                 output.append(formatDate(route.getVehicle().getStartTime().getTime(), "HH:mm")).append(","); // ArrivalTime(Vehicle's start time)
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // WaitTime equals zero
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // DelayTime equals zero
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // ServiceTime equals zero
-//                output.append(formatDate(firstTime.getStart().getTime(), "extract")).append(","); // DepartureTime equals to ArrivalTime
                 output.append(formatDate(route.getVehicle().getStartTime().getTime(), "HH:mm")).append(","); // DepartureTime equals to ArrivalTime
                 output.append(",").append(",").append(",").append(","); // related BreakTime are zero
                 output.append(0).append(","); // Distance equals to zero
                 output.append(1).append("\n"); // SequenceNo with \n
 
-                // 4)output each item in the integrated list
+                // 8)output each item in the integrated list
                 int seqR = 0; // control the sequenceNo of the tail
                 int seqCD = 1; // control the sequenceNo of collect and deliver jobs
                 for (int i = 0; i < timeList.size(); i++) {
                     Time curTime = timeList.get(i);
-                    System.out.println("time: " + curTime);
+//                    System.out.println("time: " + curTime);
 
                     // typesetting by job type
                     if (curTime.getJobId().equals("return")) {
@@ -6680,7 +6660,7 @@ public class AADS {
                         output.append(vehicleId).append(","); // VehicleName
                         output.append(curTime.getJobId()).append(","); // JobId
 
-                        // JourneyTime(the first item does not need to drive)
+                        // JourneyTime
                         if (i > 2) {
                             Time firstTime = timeList.get(i - 3);
                             Time secondTime = timeList.get(i - 2);
@@ -6721,16 +6701,7 @@ public class AADS {
                         } else {
                             output.append(formatDate(0, "H'h'm'm'")).append(","); // JourneyTime equals zero
                         }
-//                        if (i != 0) {
-//                            Time lastTime = timeList.get(i - 1);
-//                            if (lastTime != null && lastTime.getJobId().equals("drive")) { // obtain the drive duration as current job's JourneyTime
-//                                output.append(formatDate(lastTime.getDuration(), "H'h'm'm'")).append(","); // JourneyTime equals last drive duration
-//                            } else if (lastTime != null) {
-//                                output.append(formatDate(0, "H'h'm'm'")).append(","); // JourneyTime equals zero
-//                            }
-//                        } else {
-//                            output.append(formatDate(0, "H'h'm'm'")).append(","); // JourneyTime equals zero
-//                        }
+
                         // ArrivalTime
                         output.append(formatDate(curTime.getStart().getTime(), "HH:mm")).append(","); // ArrivalTime
 
@@ -6756,18 +6727,11 @@ public class AADS {
                         } else {
                             output.append(formatDate(0, "H'h'm'm'")).append(","); // WaitTime equals to zero
                         }
-//                        if (i != 0) {
-//                            Time lastTime = timeList.get(i - 1);
-//                            if (lastTime != null && lastTime.getJobId().equals("wait")) { // obtain the wait duration as current job's WaitTime
-//                                output.append(formatDate(lastTime.getDuration(), "H'h'm'm'")).append(","); // WaitTime
-//                            } else {
-//                                output.append(formatDate(0, "H'h'm'm'")).append(","); // WaitTime equals to zero
-//                            }
-//                        } else {
-//                            output.append(formatDate(0, "H'h'm'm'")).append(","); // WaitTime equals to zero
-//                        }
-                        output.append(formatDate(0, "H'h'm'm'")).append(","); // DelayTime equals zero
-                        output.append(formatDate(curTime.getDuration(), "H'h'm'm'")).append(","); // ServiceTime
+
+                        // DelayTime
+                        output.append(formatDate(0, "H'h'm'm'")).append(",");
+                        // ServiceTime
+                        output.append(formatDate(curTime.getDuration(), "H'h'm'm'")).append(",");
 
                         // DepartureTime
 //                        output.append(formatDate(curTime.getEnd().getTime(), "extract")).append(","); // DepartureTime
@@ -6829,7 +6793,7 @@ public class AADS {
                             output.append(",").append(",").append(",").append(","); // related BreakTime are zero
                         }
 
-                        // obtain distance
+                        // Distance
                         if (i > 2) {
                             Time firstTime = timeList.get(i - 3);
                             Time secondTime = timeList.get(i - 2);
@@ -6877,15 +6841,20 @@ public class AADS {
                     }
                 }
 
-                // 6. output the answer
+                // 9. output the answer
                 System.out.println(output);
             }
+
+            // test
+//            Collections.sort(cusId);
+//            System.out.println("There are " + cusId.size() + " customers in the output, their customerId are: \n" + cusId.toString());
         } else {
             System.out.println("There is no best individual.");
         }
     }
 
     public static void main(String[] args) throws IllegalAccessException, ParseException {
+        // (0. test) start recording the time used
         long start = System.currentTimeMillis();
 
         // 1. read input from the input.json
@@ -6901,7 +6870,7 @@ public class AADS {
         // 4. output the best individual
         getOutput(bestIndividual);
 
-        // (5.) Output the time used
+        // (5. test) output the time used
         long end = System.currentTimeMillis();
         System.out.println("overall time consuming: " + (end - start) * 1.0 / 1000 + "s");
     }
