@@ -4961,12 +4961,11 @@ public class AADS {
             return -1;
         }
 
-        public Boolean returnToDepot(Customer customer, PreProcessData data, long dailyDriveTime) {
+        public Boolean returnToDepot(Customer customer, PreProcessData data, long dailyDriveTime, long overallDuration) {
             if (customer != null) {
                 // 1. 获取全局data中需要使用的数据
                 long curTime = data.getCurTime(); // 送完货的耗时
                 Site deliverSite = data.getDeliverSite();
-                Date overallDeliverTime = data.getOverallDeliverTime(); // 送完货的时间
 //                System.out.println("return back time：" + data.getCurTime());
 
                 // 2. 获取终点到起点的时间
@@ -4990,7 +4989,7 @@ public class AADS {
                 try {
                     curTime += returnTime * 1000;
                     createTimeNode(getVehicle(),
-                            overallDeliverTime.getTime(),
+                            overallDuration, // input parameter
                             returnTime * 1000, // unit: ms
                             "return",
                             returnDistance,
@@ -5730,7 +5729,7 @@ public class AADS {
                 }
             }
         } else { // 以订单为单位,遍历所有请求Customer，为当前请求Customer分配一辆新车Vehicle，并为该车临时初始化一条新路线Route
-            // 遍历每个个体的路线
+            // 1. 遍历每个个体的路线
             for (Individual individual : individuals) {
                 for (Route route : individual.getRoutes()) {
                     long min = Long.MAX_VALUE; // 设为最大值
@@ -5780,8 +5779,8 @@ public class AADS {
                             tmp.put((int) route.getId(), dto);
                             // 3. 标记为已送货
                             bestCustomer.setDelivered(true);
-                            // 4. 执行返程
-                            addReturnRoute(tmp, data, individuals);
+//                            // 4. 执行返程  TODO  1206 0109临时注释
+//                            addReturnRoute(tmp, data, individuals);
                         }
                     } else {
 //                        unassignedCustomer.add(bestCustomer);
@@ -5924,6 +5923,11 @@ public class AADS {
 //                    unassignedCustomer.add(customer);
 //                }
 //            }
+
+//            // 执行每条路线的返程  TODO  1206 0132
+//            System.out.println("SuC: " + sucCustomers.keySet());
+//            System.out.println("SS: "+sucCustomers.get(45).getRoute().getCustomers().toString());
+//            System.out.println("S: "+sucCustomers.get(45).isReturned());
         }
         // 赋值给sucCustomers，并返回
         sucCustomers = tmp;
@@ -6013,17 +6017,22 @@ public class AADS {
 
             // 1. 从dto获取数据
             SucCustomerDto dto = entry.getValue();
-//            System.out.println("DTO: "+dto);
-//            System.out.println("entry: "+entry.toString());
             Route route = dto.getRoute();
-//            System.out.println("route: "+route.toString());
             Individual individual = dto.getIndividual();
             int routeIdx = dto.getRouteIdx();
-//            System.out.println("返程 routeIdx: " + routeIdx);
             int individualIdx = dto.getIndividualIdx();
             Customer customer = dto.getCustomer();
             GlobalData globalData = dto.getGlobalData();
             long dailyDriveTime = globalData.getDailyDriveTime();
+//            System.out.println("DTO: "+dto);
+//            System.out.println("entry: "+entry.toString());
+//            System.out.println("route: "+route.toString());
+//            System.out.println("返程 routeIdx: " + routeIdx);
+
+            long overallDuration = route.getOverallDuration(); // 获取每个路线在返程前的总时长
+            long vehicleStartTime = dto.getRoute().getVehicle().getStartTime().getTime(); // 获取路线的发车时间
+//            System.out.println("11: " + new Date(overallDuration));
+//            System.out.println("22: " + dto.getRoute().getVehicle().getStartTime());
 //                    System.out.println("请求customer：" + customer);
 //            System.out.println("总驾驶时间：" + dailyDriveTime);
 //                System.out.println("最后一个请求：" + assignedCustomer.get(assignedCustomer.size() - 1));
@@ -6035,7 +6044,9 @@ public class AADS {
                 boolean canReturn; // 是否能返程
                 try {
 //                    System.out.println("route::: " + route.getId());
-                    canReturn = route.returnToDepot(customer, data, dailyDriveTime); // input daily overall drive time
+                    canReturn = route.returnToDepot(customer, data,
+                            dailyDriveTime,
+                            overallDuration + vehicleStartTime); // input daily overall drive time
                 } catch (RuntimeException e) {
                     continue;
                 }
@@ -6093,20 +6104,21 @@ public class AADS {
             res = assignCustomers(individuals, data, true, sucCustomers, data.getCustomerList());
             if (res != null) {
                 individuals = res.getFirst(); // individual list
+                sucCustomers = res.getSecond(); // successful customers TODO 1206 0853添加
             }
 //            System.out.println("个数："+sucCustomers.size());
 
-            // 2)更新种群的总fitness
-            double sum = 0.0;
-            for (Individual individual : individuals) {
-                sum += individual.getFitness();
-            }
-            population.setOverallFitness(sum / (60.0 * 60 * 1000));
-
-            // 3)给种群设置个体列表
-            population.setIndividuals(individuals);
-            System.out.println("Overall fitness is :  " + population.getOverallFitness() + " hours");
-            return population;
+//            // 2)更新种群的总fitness
+//            double sum = 0.0;
+//            for (Individual individual : individuals) {
+//                sum += individual.getFitness();
+//            }
+//            population.setOverallFitness(sum / (60.0 * 60 * 1000));
+//
+//            // 3)给种群设置个体列表
+//            population.setIndividuals(individuals);
+//            System.out.println("Overall fitness is :  " + population.getOverallFitness() + " hours");
+//            return population;
         } else { // 针对小数据量
             res = assignCustomers(individuals, data, method, sucCustomers, data.getCustomerList());
             if (res != null) {
@@ -6229,7 +6241,6 @@ public class AADS {
             }
             System.out.println("现在车辆：" + data.getVehicleList().toString());
 
-            // TODO  20241202 2115 把能成功的重新分配？   👇
 //        individuals=initialIndividuals(individuals,nPop,len,random,data); // 初始化个体列表
             // 2)初始化个体列表，重新分配成功分配的请求
             List<Route> routes = individuals.get(0).getRoutes(); // 目前种群大小=1
@@ -6266,7 +6277,7 @@ public class AADS {
                 }
                 data = tmpData; // 初始化data为全局data（全局data只可用，不可更新操作，除了在main()中
                 data.setOverallDeliverTime(new Date());
-                // 重新插入能成功分配的请求
+                // 重新插入能成功分配的请求(以订单为顺序)
                 res = assignCustomers(individuals, data, true, sucCustomers, rewritableList); //TODO  1204 1357改为了true
                 if (res != null) {
                     individuals = res.getFirst(); // individual list
@@ -6275,7 +6286,6 @@ public class AADS {
             }
             System.out.println("individuals3: " + individuals);
             System.out.println("susCustomers3: " + sucCustomers);
-            // TODO  20241202 2115 把能成功的重新分配？   👆
         }
 
         // 6. 执行每条路线的返程
@@ -6394,7 +6404,6 @@ public class AADS {
 //            // TODO 1203 1327 临时注释  处理未分配的请求👆
             // TODO 1204 0028 临时注释  处理多车辆👆
         }
-        // TODO 20241202 2117暂时注释↑
 //        System.out.println("两个路线的sucCustomers：" + sucCustomers.toString());
         System.out.println("unassignedCustomer: " + unassignedCustomer.toString());
 
@@ -6403,7 +6412,7 @@ public class AADS {
         for (Individual individual : individuals) {
             sum += individual.getFitness();
         }
-        population.setOverallFitness(sum);
+        population.setOverallFitness(sum / (60.0 * 60 * 1000));
 
         // 10. 给种群设置个体列表
         population.setIndividuals(individuals);
