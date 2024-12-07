@@ -2054,13 +2054,13 @@ public class AADS {
 //        System.out.println("List size: " + l.size());
 
         // 6. create Route DTO
-        AdjacencyListGraph<SiteGraph, Integer> graph = new AdjacencyListGraph(true); // graph containing all locations and routes TODO 包含所有地点及路程的图
+        AdjacencyListGraph<Site, Integer> graph = new AdjacencyListGraph(true); // graph containing all locations and routes TODO 包含所有地点及路程的图
 
         // traverse 'locationList' and create all locations (vertex) TODO 遍历locationList,创建所有地点(vertex)
-        List<Vertex<SiteGraph>> allVerticesList = new ArrayList<>();
+        List<Vertex<Site>> allVerticesList = new ArrayList<>();
         for (Site site : locationList) {
-            SiteGraph siteGraph = new SiteGraph(site.getCoordinates());
-            Vertex<SiteGraph> v = graph.insertVertex(siteGraph);
+            Site siteGraph = new Site(site.getCoordinates());
+            Vertex<Site> v = graph.insertVertex(siteGraph);
             allVerticesList.add(v);
         }
 
@@ -2073,9 +2073,9 @@ public class AADS {
                     // TODO 只要不为null,则表示是到其他地点的距离\时间,则添加边
                     JSONArray arr = new JSONArray((String) disAndTime.opt(i));
                     // get the head of a directed arc TODO  获取有向弧的狐头
-                    Vertex<SiteGraph> startV = allVerticesList.get((int) v.getId());
+                    Vertex<Site> startV = allVerticesList.get((int) v.getId());
                     // get the tail of a directed arc TODO  获取有向弧的狐尾
-                    Vertex<SiteGraph> endV = allVerticesList.get(i);
+                    Vertex<Site> endV = allVerticesList.get(i);
                     // arr.opt(0): distance; arr.opt(1): time
 //                    graph.insertEdge(v, endV, (Integer) arr.opt(0));
                     graph.insertEdge(startV, endV, (Integer) arr.opt(1));
@@ -2104,16 +2104,16 @@ public class AADS {
      */
     protected static class Time {
         private long id;
-        private Date start; // 开始时间
-        private Date end; // 结束时间
-        private double duration; // 时长
-        private String jobId; // 任务id
-        private int distance; // 行驶距离
-        private Vehicle vehicle; // 车辆（暂存使用）
-        private long vehicleId; // 车辆id
-        private long customerId; // 请求id
+        private Date start; // start time
+        private Date end; // end time
+        private double duration;
+        private String jobId;
+        private int distance; // journey distance
+        private Vehicle vehicle; // vehicle DTO
+        private long vehicleId; // vehicle id
+        private long customerId;
 
-        private static int next = 0; // 自增id
+        private static int next = 0; // auto-increment id
 
         public Time() {
             this.id = 0;
@@ -2250,15 +2250,15 @@ public class AADS {
      * Vehicle DTO
      */
     protected static class Vehicle {
-        private long id; // 车辆识别码
-        private int startSite; // 出发地id
-        private Date startTime; // 车辆开始工作的时间
-        private int weight; // 车辆容量
-        private int endSite; // 目的地id
+        private long id; // vehicle identification number
+        private int startSite; // start site id
+        private Date startTime; // when vehicle starts working
+        private int weight; // weight of the vehicle
+        private int endSite; // destination id
 
-        private final double mContinuousDrivingInHours = 4.5; // 最大持续驾驶时间
-        private final int mDailyDriveInHours = 9; // 每日最大驾驶时间
-        private final int mDurationInHours = 13; // 最大路线时长
+        private final double mContinuousDrivingInHours = 4.5; // maximum continuous driving time
+        private final int mDailyDriveInHours = 9; // maximum daily driving time
+        private final int mDurationInHours = 13; // maximum route duration
 
         // time list for the output
         private List<Time> driveTimeList;
@@ -2267,7 +2267,7 @@ public class AADS {
         private List<Time> waitTimeList;
         private List<Time> delayTimeList;
 
-        private int curSiteId; // 当前所在地id
+        private int curSiteId; // current site id
 
         public Vehicle() {
             this.id = 0;
@@ -2286,7 +2286,7 @@ public class AADS {
         public Vehicle(long id, int startSite, Date startTime, int weight, int endSite,
                        List<Time> driveTimeList, List<Time> otherTimeList, List<Time> breakTimeList,
                        List<Time> waitTimeList, List<Time> delayTimeList, int curSiteId) {
-            this.id = id; // id设为compartmentId
+            this.id = id; // id equals to 'compartmentId'
             this.startSite = startSite;
             this.startTime = startTime;
             this.weight = weight;
@@ -2296,7 +2296,7 @@ public class AADS {
             this.breakTimeList = breakTimeList;
             this.waitTimeList = waitTimeList;
             this.delayTimeList = delayTimeList;
-            this.curSiteId = curSiteId; // 初始值应为发车地id，即startSite
+            this.curSiteId = curSiteId; // default value is curSiteId, which would change during the route
         }
 
         public long getId() {
@@ -2304,7 +2304,7 @@ public class AADS {
         }
 
         public void setId(long id) {
-            this.id = id; // 将id设置为车辆唯一标识码
+            this.id = id;
         }
 
         public int getStartSite() {
@@ -2425,16 +2425,21 @@ public class AADS {
      * Site DTO
      */
     protected static class Site {
-        private long id; // （取货/送货）地点Id，自增实现
-        private String[] coordinates; // （取货/送货）地点坐标
-        private JSONArray disAndTime; // 到其他地点的距离/时间
+        private long id; // auto-increment site id(collect / deliver) TODO （取货/送货）地点Id，自增实现
+        private String[] coordinates; // coordinates of current site(collect / deliver) TODO （取货/送货）地点坐标
+        private JSONArray disAndTime; // distance and time from current site to other sites TODO 到其他地点的距离/时间
 
-        private static int next = 0; // 自增id
+        private static int next = 0; // auto-increment id
 
         public Site() {
             this.id = 0;
             this.coordinates = new String[]{};
             this.disAndTime = new JSONArray();
+        }
+
+        public Site(String[] coordinates) { // used for creating graph
+            this.id = next++;
+            this.coordinates = coordinates;
         }
 
         public Site(String[] coordinates, JSONArray disAndTime) {
@@ -2473,46 +2478,46 @@ public class AADS {
         }
     }
 
-    /**
-     * SiteGraph (for test) DTO
-     */
-    protected static class SiteGraph {
-        private long id; // （取货/送货）地点Id，自增实现
-        private String[] coordinates; // （取货/送货）地点坐标
-
-        private static int next = 0; // 自增id
-
-        public SiteGraph() {
-            this.id = 0;
-            this.coordinates = new String[]{};
-//            this.disAndTime = new JSONArray();
-        }
-
-        public SiteGraph(String[] coordinates) {
-            this.id = next++;
-            this.coordinates = coordinates;
-        }
-
-        public long getId() {
-            return id;
-        }
-
-        public String[] getCoordinates() {
-            return coordinates;
-        }
-
-        public void setCoordinates(String[] coordinates) {
-            this.coordinates = coordinates;
-        }
-
-        @Override
-        public String toString() {
-            return "SiteDto{" +
-                    "id=" + id +
-                    ", coordinates=" + Arrays.toString(coordinates) +
-                    '}';
-        }
-    }
+//    /**
+//     * SiteGraph (for test) DTO
+//     */
+//    protected static class SiteGraph {
+//        private long id; // auto-increment site id(collect / deliver) TODO （取货/送货）地点Id，自增实现
+//        private String[] coordinates; // coordinates of current site(collect / deliver) TODO （取货/送货）地点坐标
+//
+//        private static int next = 0; // 自增id
+//
+//        public SiteGraph() {
+//            this.id = 0;
+//            this.coordinates = new String[]{};
+////            this.disAndTime = new JSONArray();
+//        }
+//
+//        public SiteGraph(String[] coordinates) {
+//            this.id = next++;
+//            this.coordinates = coordinates;
+//        }
+//
+//        public long getId() {
+//            return id;
+//        }
+//
+//        public String[] getCoordinates() {
+//            return coordinates;
+//        }
+//
+//        public void setCoordinates(String[] coordinates) {
+//            this.coordinates = coordinates;
+//        }
+//
+//        @Override
+//        public String toString() {
+//            return "SiteDto{" +
+//                    "id=" + id +
+//                    ", coordinates=" + Arrays.toString(coordinates) +
+//                    '}';
+//        }
+//    }
 
     /**
      * Customer DTO
@@ -4666,7 +4671,7 @@ public class AADS {
         private List<Site> locationList;
         private List<Vehicle> vehicleList;
         private List<Customer> customerList;
-        private AdjacencyListGraph<SiteGraph, Integer> graph; // 所有地点的图
+        private AdjacencyListGraph<Site, Integer> graph; // 所有地点的图
 
         /* 分配请求customer的数据 */
         private Site deliverSite;
@@ -4697,7 +4702,7 @@ public class AADS {
 
         public PreProcessData(String instanceName, List<Site> locationList,
                               List<Vehicle> vehicleList, List<Customer> customerList,
-                              AdjacencyListGraph<SiteGraph, Integer> graph, Random random) {
+                              AdjacencyListGraph<Site, Integer> graph, Random random) {
             this.instanceName = instanceName;
             this.locationList = locationList;
             this.vehicleList = vehicleList;
@@ -4738,11 +4743,11 @@ public class AADS {
             return customerList;
         }
 
-        public void setGraph(AdjacencyListGraph<SiteGraph, Integer> graph) {
+        public void setGraph(AdjacencyListGraph<Site, Integer> graph) {
             this.graph = graph;
         }
 
-        public AdjacencyListGraph<SiteGraph, Integer> getGraph() {
+        public AdjacencyListGraph<Site, Integer> getGraph() {
             return graph;
         }
 
