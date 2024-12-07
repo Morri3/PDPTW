@@ -3606,9 +3606,11 @@ public class AADS {
                 // 6. 只有在所有取货和送货都完成后才进行Maximum约束检查
 //                if (!collectFirst && getCustomers().size() == data.getCustomerList().size()) {
                 if (!collectFirst) {
-//                    System.out.println("route duration: " +
-//                            ((curTime - (getVehicle().getStartTime()).getTime()) / (1000 * 60 * 60.0)) + "h");
-//                    System.out.println("daily drive time: " + (dailyDriveTime / (1000 * 60.0)) + "min");
+                    System.out.println("curTime: " + curTime + " ; " + new Date(curTime));
+                    System.out.println("vehicle start time: " + (getVehicle().getStartTime()).getTime() + " ; " + new Date((getVehicle().getStartTime()).getTime()));
+                    System.out.println("daily drive time: " + (dailyDriveTime / (1000 * 60.0)) + "min");
+                    System.out.println("ROUTE duration: " +
+                            ((curTime - (getVehicle().getStartTime()).getTime()) / (1000 * 60 * 60.0)) + "h");
 
                     // 1) route duration
                     long mDuration = (long) getVehicle().getMDurationInHours() * 60 * 60 * 1000;
@@ -4227,17 +4229,17 @@ public class AADS {
                 // 2. 添加请求customer
                 getCustomers().add(customer);
 
-                if (type.equals("combination")) {
-                    for (Entry<Long, List<Customer>> entry : assignedCustomer.entrySet()) {
-                        long routeIdx = entry.getKey(); // obtain the index of each route
-//                        System.out.println("rid: " + routeIdx);
-                        List<Customer> customerList = entry.getValue();
-//                        System.out.println("cusList: "+customerList.toString());
-                        for (Customer c : customerList) {
-                            if (!c.isDelivered()) System.out.println("999");
-                        }
-                    }
-                }
+//                if (type.equals("combination")) {
+//                    for (Entry<Long, List<Customer>> entry : assignedCustomer.entrySet()) {
+//                        long routeIdx = entry.getKey(); // obtain the index of each route
+////                        System.out.println("rid: " + routeIdx);
+//                        List<Customer> customerList = entry.getValue();
+////                        System.out.println("cusList: "+customerList.toString());
+//                        for (Customer c : customerList) {
+//                            if (!c.isDelivered()) System.out.println("999");
+//                        }
+//                    }
+//                }
 
                 // 3. 每执行addCustomer，就创建Time节点，创建后将全局列表tmpTimeList清零
                 List<Time> timeList = tmpTimeList;
@@ -5008,7 +5010,6 @@ public class AADS {
             // 4.遍历送货
             for (Customer customer : deliverCustomers) {
 //                if (customer.isDelivered()) continue; // 若已被分配，则跳过
-
                 long min = Long.MAX_VALUE;
                 Route bestRoute = null;
                 Individual bestIndividual = null;
@@ -5124,8 +5125,8 @@ public class AADS {
 //                }
 //            }
             // TODO 1206 1107注释👆随机分配实现前，可运行的代码
-            double sumCost = 0.0; // test
-            double sumDuration = 0.0; // test
+            double sumCost = 0.0;
+            double sumDuration = 0.0;
 
             for (Customer customer : customerList) {
                 long min = Long.MAX_VALUE;
@@ -5159,11 +5160,10 @@ public class AADS {
                                 // 成功分配
                                 flag = true;
 
-                                sumCost += cost; // test
-                                sumDuration += bestRoute.getOverallDuration(); // test
+                                sumCost += cost;
+                                sumDuration += bestRoute.getOverallDuration();
                             }
                         } else {
-                            System.out.println("这？？");
                         }
 //                        }
                     }
