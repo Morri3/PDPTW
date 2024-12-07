@@ -2478,47 +2478,6 @@ public class AADS {
         }
     }
 
-//    /**
-//     * SiteGraph (for test) DTO
-//     */
-//    protected static class SiteGraph {
-//        private long id; // auto-increment site id(collect / deliver) TODO （取货/送货）地点Id，自增实现
-//        private String[] coordinates; // coordinates of current site(collect / deliver) TODO （取货/送货）地点坐标
-//
-//        private static int next = 0; // 自增id
-//
-//        public SiteGraph() {
-//            this.id = 0;
-//            this.coordinates = new String[]{};
-////            this.disAndTime = new JSONArray();
-//        }
-//
-//        public SiteGraph(String[] coordinates) {
-//            this.id = next++;
-//            this.coordinates = coordinates;
-//        }
-//
-//        public long getId() {
-//            return id;
-//        }
-//
-//        public String[] getCoordinates() {
-//            return coordinates;
-//        }
-//
-//        public void setCoordinates(String[] coordinates) {
-//            this.coordinates = coordinates;
-//        }
-//
-//        @Override
-//        public String toString() {
-//            return "SiteDto{" +
-//                    "id=" + id +
-//                    ", coordinates=" + Arrays.toString(coordinates) +
-//                    '}';
-//        }
-//    }
-
     /**
      * Customer DTO
      */
