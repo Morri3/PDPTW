@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class AADS {
-    /* classes and interface for JSON parser */
     protected static class JSONException extends RuntimeException {
         private static final long serialVersionUID = 0; // Serialization ID
 
@@ -28,9 +27,13 @@ public class AADS {
     }
 
     protected interface JSONString {
-        public String toJSONString(); // Allowing a class to produce its own JSON serialization.
+        // Allows a class to change the behavior of JSONObject.toString(), JSONArray.toString(), and JSONWriter.value(Object).
+        public String toJSONString();
     }
 
+    /**
+     * Allow the parsing of JSON source strings, called in the JSONObject and JSONArray constructors.
+     */
     protected static class JSONTokener {
         private long character; // current read character position on the current line当前行的当前读字符的位置
         private boolean eof; // flag to indicate if the end of the input has been found是否是输入末尾
@@ -59,18 +62,16 @@ public class AADS {
             this(new StringReader(s));
         }
 
-        /**
-         * Get the next character in the source string.
-         */
+        /* Get the next character in the source string. */
         public char next() throws JSONException {
             int c;
-            // 若请求过字符，则复原flag标志，获取上一次请求的字符
+            // If the character has been requested, restore the flag and get the character requested last time
             if (this.usePrevious) {
                 this.usePrevious = false;
                 c = this.previous;
             } else {
                 try {
-                    c = this.reader.read(); // 从流中读取单个字符
+                    c = this.reader.read(); // read a single character from the stream
                 } catch (IOException exception) {
                     throw new JSONException(exception);
                 }
@@ -83,50 +84,43 @@ public class AADS {
             }
 
             this.incrementIndexes(c); // update indexes
-            this.previous = (char) c; // 当前字符作为下一次操作的previous
-            return this.previous; // 返回当前字符
+            this.previous = (char) c; // update the 'previous' character
+            return this.previous; // return current character
         }
 
-        /**
-         * Get the next n characters.
-         */
+        /* Get the next n characters. */
         public String next(int n) throws JSONException {
             if (n == 0) return "";
 
             char[] chars = new char[n];
             int pos = 0;
 
-            // 遍历n个字符
+            // iterate over n characters
             while (pos < n) {
                 chars[pos] = this.next();
                 if (this.end()) {
                     throw new JSONException("Substring bounds error");
-//                    throw this.syntaxError("Substring bounds error");
                 }
-                pos++; // TODO  改为pos++;
+                pos++;
             }
-            return new String(chars); // 读取的n个字符 转为 字符串
+            return new String(chars); // transfer n characters into a string
         }
 
-        /**
-         * Get the next char in the string, skipping whitespace.
-         */
+        /* Get the next char in the string, skipping whitespace. */
         public char nextClean() throws JSONException {
-            // TODO 考虑改为while
             while (true) {
-                char c = this.next(); // 获取下个字符
-                if (c == 0 || c > ' ') { // 读到文本结尾 / 读取的是ASCII码表中空格后的字符，就返回该字符
+                char c = this.next(); // read next character
+                // Read to the end of the text/read the character after the space in the ASCII code table, and return the character
+                if (c == 0 || c > ' ') {
                     return c;
                 }
             }
         }
 
-        /**
-         * Get the next value (Boolean, Double, Integer, JSONArray, JSONObject, Long, String, JSONObject.NULL object)
-         */
+        /* Get the next value (Boolean, Double, Integer, JSONArray, JSONObject, Long, String, JSONObject.NULL object) */
         public Object nextValue() throws JSONException {
             char c = this.nextClean();
-            // 判断是否有更深的对象 / 数组的开始符号，若有抛出异常
+            // Determines whether there is a deeper object/array start symbol. If so, throw an exception.
             switch (c) {
                 case '{':
                     this.back();
@@ -143,119 +137,112 @@ public class AADS {
                         throw new JSONException("JSON Array depth too large to process.", e);
                     }
             }
-            return nextSimpleValue(c); // 返回下一个值
+            return nextSimpleValue(c); // return next value
         }
 
-        /**
-         * Increments the internal indexes according to the previous character
+        /* Increments the internal indexes according to the previous character
          * read and the character passed as the current character.
-         * 根据 读取的前一个字符 和 作为当前字符传递的字符 增加内部索引
-         */
+         * TODO  根据 读取的前一个字符 和 作为当前字符传递的字符 增加内部索引 */
         private void incrementIndexes(int c) {
             if (c > 0) {
                 this.index++;
-                if (c == '\r') { // 回车（将读取下一行，当前字符作为下一次读取时的previous character，将character复原
+                if (c == '\r') { // Enter(read the next line, the current character is used as the previous character for the next read, and the character is restored
                     this.line++;
                     this.characterPreviousLine = this.character;
                     this.character = 0;
-                } else if (c == '\n') { // 换行
-                    if (this.previous != '\r') { // 不是回车
+                } else if (c == '\n') {
+                    if (this.previous != '\r') { // not Enter
                         this.line++;
                         this.characterPreviousLine = this.character;
                     }
-                    this.character = 0; // 将character复原
+                    this.character = 0; // restore the character
                 } else {
-                    this.character++; // 将读取这行的下一个字符
+                    this.character++; // read next character in the same line
                 }
             }
         }
 
-        /**
-         * Decrements the indexes based on the previous character read.
-         */
+        /* Decrements the indexes based on the previous character read. */
         private void decrementIndexes() {
             this.index--;
-            if (this.previous == '\r' || this.previous == '\n') { // 读取回车或换行
-                // 回到回车/换行的位置
+            if (this.previous == '\r' || this.previous == '\n') { // read Enter/ \n
+                // return to the places of Enter /  \n
                 this.line--;
                 this.character = this.characterPreviousLine;
             } else if (this.character > 0) {
-                // 回退一个字符
+                // back one character
                 this.character--;
             }
         }
 
-        // TODO 这里加了public
         public Object nextSimpleValue(char c) {
             String string;
-            // 若读取的字符是引号，则需要读取字符串
+            // we should read strings if the character c is a quotation mark
             switch (c) {
-                case '"': // 双引号
-                case '\'': // 单引号
+                case '"': // double quotes
+                case '\'': // single quotes
                     return this.nextString(c);
             }
 
-            // 累计读取boolean值、null值、数字，直至文本结尾/格式字符
+            // put boolean value, null value and number into the StringBuilder, until reaching EOF
             StringBuilder sb = new StringBuilder();
             while (c >= ' ' && ",:]}/\\\"[{;=#".indexOf(c) < 0) {
                 /*
-                    , 逗号     : 冒号        ] 右中括号      } 右花括号      / 左斜杆      \\ 右斜杆
-                    \" 双引号   [ 左中括号    { 左花括号      ; 分号         = 等号        # 井号
+                    , comma     : colon     ] right bracket     } right curly bracket
+                    / left slash        \\ right slash      \" double quote     [ left bracket
+                    { left curly bracket        ; semicolon     = equal sign        # pound sign
                 */
                 sb.append(c);
                 c = this.next();
             }
-            // while退出时，正常应该读取到eof；否则回退一个字符
+            // if reaching here without reading the EOF, we should back a character
             if (!this.eof) this.back();
 
-            string = sb.toString().trim(); // 结果转为字符串，并移除空格
+            string = sb.toString().trim(); // convert to a string, removing the spaces
             if ("".equals(string)) throw new JSONException("Missing value");
             return JSONObject.stringToValue(string);
         }
 
-        /**
-         * Return the characters up to the next close quote character.
-         * Backslash processing is done. The formal JSON format does not
-         * allow strings in single quotes, but an implementation is allowed to
-         * accept them.
-         * 返回到下一个关闭的引号字符为止 读取的字符
-         * 已完成反斜杠处理
-         * 标准JSON不允许单引号中的字符串，但允许实现接受它们
-         */
+        /* Return the characters up to the next close quote character.
+         * Backslash processing is done. The formal JSON format does not allow strings in single quotes,
+         * but an implementation is allowed to accept them.
+         * TODO  返回到下一个关闭的引号字符为止 读取的字符
+         *  已完成反斜杠处理
+         *  标准JSON不允许单引号中的字符串，但允许实现接受它们 */
         public String nextString(char quote) throws JSONException {
             char c;
             StringBuilder sb = new StringBuilder();
 
             while (true) {
-                c = this.next(); // 读取下一个字符
+                c = this.next(); // read next character
                 switch (c) {
-                    case 0: // 文本结尾
-                    case '\n': // 换行
-                    case '\r': // 回车
+                    case 0: // end of the text
+                    case '\n':
+                    case '\r': // Enter
                         throw new JSONException("Unterminated string. Character with int code "
                                 + (int) c + " is not allowed within a quoted string.");
-                    case '\\': // 反斜杠
+                    case '\\': // right slash
                         c = this.next();
                         switch (c) {
-                            case 'b': // 退格
+                            case 'b': // backspace
                                 sb.append('\b');
                                 break;
-                            case 't': // Tab制表符
+                            case 't': // Tab
                                 sb.append('\t');
                                 break;
-                            case 'n': // 换行
+                            case 'n': // new line
                                 sb.append('\n');
                                 break;
-                            case 'f': // 换页符
+                            case 'f': // page break
                                 sb.append('\f');
                                 break;
-                            case 'r': // 回车
+                            case 'r': // Enter
                                 sb.append('\r');
                                 break;
-                            case 'u': // 十六进制的Unicode字符
+                            case 'u': // unicode character in hexadecimal
                                 String next = this.next(4);
                                 try {
-                                    sb.append((char) Integer.parseInt(next, 16)); // 十六进制转为二进制字符
+                                    sb.append((char) Integer.parseInt(next, 16)); // hexadecimal to binary
                                 } catch (NumberFormatException e) {
                                     throw new JSONException("Illegal escape. \\u must be followed by a 4 digit hexadecimal number. \\"
                                             + next + " is not valid.", e);
@@ -272,20 +259,18 @@ public class AADS {
                         }
                         break;
                     default:
-                        if (c == quote) { // 若等于引号，表示字符串读取完毕，返回
+                        if (c == quote) { // represents the end of a string
                             return sb.toString();
                         }
-                        sb.append(c); // 加入StringBuilder
+                        sb.append(c); // add into the StringBuilder
                 }
             }
         }
 
-        /**
-         * Back up one character.
-         * 可以在尝试解析下一个数字或标识符之前测试数字或字母
-         */
+        /* Back up one character.
+         * TODO  可在尝试解析下一个数字或标识符之前测试数字或字母 */
         public void back() throws JSONException {
-            // 最多回退一个字符，若已经在字符串开头，无需回退
+            // backtrack at most one character. If it is already at the start of the string, no backtracking is required.
             if (this.usePrevious || this.index <= 0)
                 throw new JSONException("Stepping back two steps is not supported");
 
@@ -294,9 +279,7 @@ public class AADS {
             this.eof = false;
         }
 
-        /**
-         * Checks if reaching the end of the input.
-         */
+        /* Checks if reaching the end of the input. */
         public boolean end() {
             return this.eof && !this.usePrevious;
         }
@@ -314,7 +297,7 @@ public class AADS {
     /**
      * Configuration base object (immutable) for parsers.
      */
-    @SuppressWarnings({""})
+    @SuppressWarnings({""}) // Suppress compiler warnings
     protected static class ParserConfiguration {
         /* Used to indicate no limit to the maximum nesting depth when parsing a document. */
         public static final int UNDEFINED_MAXIMUM_NESTING_DEPTH = -1;
@@ -330,38 +313,23 @@ public class AADS {
             this.maxNestingDepth = DEFAULT_MAXIMUM_NESTING_DEPTH;
         }
 
-        /**
-         * Constructs a new ParserConfiguration with the specified settings.
-         */
+        /* Constructs a new ParserConfiguration with the specified settings. */
         protected ParserConfiguration(final boolean keepStrings, final int maxNestingDepth) {
             this.keepStrings = keepStrings;
             this.maxNestingDepth = maxNestingDepth;
         }
 
-        /**
-         * Provides a new instance of the same configuration ("deep" clone).
-         */
+        /* Provides a new instance of the same configuration ("deep" clone). */
         @Override
         protected ParserConfiguration clone() {
             return new ParserConfiguration(this.keepStrings, this.maxNestingDepth);
         }
 
-        /**
-         * The maximum nesting depth that the parser will descend before throwing an exception
-         * when parsing an object (Map, Collection) into JSON-related objects.
-         */
-//        public int getMaxNestingDepth() {
-//            return maxNestingDepth;
-//        }
-
-        /**
-         * 定义解析器在解析对象时将下降的最大嵌套深度
-         * Defines the maximum nesting depth that the parser will descend before throwing an exception
+        /* Defines the maximum nesting depth that the parser will descend before throwing an exception
          * when parsing an object (e.g. Map, Collection) into JSON-related objects.
          * The default max nesting depth is 512. The parser will throw a JsonException if reaching the maximum depth.
          * Using any negative value as a parameter is equivalent to setting no limit to the nesting depth.
-         * The parses will go as deep as the maximum call stack size allows.
-         */
+         * The parses will go as deep as the maximum call stack size allows. */
         @SuppressWarnings("unchecked")
         public <T extends ParserConfiguration> T withMaxNestingDepth(int maxNestingDepth) {
             T newConfig = (T) this.clone();
@@ -401,28 +369,23 @@ public class AADS {
             return clone;
         }
 
-        /**
-         * 控制解析器在遇到重复键时的行为
-         * Controls the parser's behavior when meeting duplicate keys.
+        /* Controls the parser's behavior when meeting duplicate keys.
          * If set to false, the parser will throw a JSONException when meeting a duplicate key.
-         * Or the duplicate key's value will be overwritten.
-         */
+         * Or the duplicate key's value will be overwritten. */
         public JSONParserConfiguration withOverwriteDuplicateKey(final boolean overwriteDuplicateKey) {
             JSONParserConfiguration clone = this.clone();
             clone.overwriteDuplicateKey = overwriteDuplicateKey;
             return clone;
         }
 
-        /**
-         * 遇到重复键时，控制解析器是否覆盖重复键
-         */
+        /* when meeting duplicated keys, controlling the parser to overwrite */
         public boolean isOverwriteDuplicateKey() {
             return this.overwriteDuplicateKey;
         }
     }
 
     /**
-     * 实现writer接口的方法，用于实现StringBuilder的数据读写
+     * Implement the writer interface method to implement StringBuilder data reading and writing
      */
     protected static class StringBuilderWriter extends Writer {
         private final StringBuilder builder;
@@ -498,31 +461,22 @@ public class AADS {
     protected static class JSONObject {
         private Map<String, Object> map;
 
-        /**
-         * 1) JSONObject.NULL is equivalent to the null value in JavaScript.
-         * 2) Java's null is equivalent to the undefined value in JavaScript.
-         */
+        /* 1) JSONObject.NULL is equivalent to the null value in JavaScript.
+         * 2) Java's null is equivalent to the undefined value in JavaScript. */
         private static final class Null {
-            /**
-             * There is only a single instance of the NULL object.
-             */
+            /* There is only a single instance of the NULL object. */
             @Override
             protected final Object clone() {
                 return this;
             }
 
-            /**
-             * A Null object is equal to the null value and to itself.
-             */
+            /* A Null object is equal to the null value and to itself. */
             @Override
-//            @SuppressWarnings("lgtm[java/unchecked-cast-in-equals]")
             public boolean equals(Object object) {
                 return object == null || object == this;
             }
 
-            /**
-             * Returns a hash code value for the object. A Null object is equal to the null value and to itself.
-             */
+            /* Returns a hash code value for the object. A Null object is equal to the null value and to itself. */
             @Override
             public int hashCode() {
                 return 0;
@@ -539,18 +493,16 @@ public class AADS {
         // Regular Expression Pattern that matches JSON Numbers
         public static final Pattern NUMBER_PATTERN = Pattern.compile("-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?");
 
-        /**
-         * Check whether the object is a NaN or infinite number.
-         */
+        /* Check whether the object is a NaN or infinite number. */
         public static void verify(Object o) throws JSONException {
             if (o instanceof Number && !IsFiniteNumber((Number) o))
                 throw new JSONException("JSON doesn't allow non-finite numbers.");
         }
 
         private static boolean IsFiniteNumber(Number n) {
-            if (n instanceof Double && (((Double) n).isInfinite() || ((Double) n).isNaN())) { // 不合法的Double类型
+            if (n instanceof Double && (((Double) n).isInfinite() || ((Double) n).isNaN())) { // invalid Double type
                 return false;
-            } else if (n instanceof Float && (((Float) n).isInfinite() || ((Float) n).isNaN())) { // 不合法的Float类型
+            } else if (n instanceof Float && (((Float) n).isInfinite() || ((Float) n).isNaN())) { // invalid Float type
                 return false;
             }
             return true;
@@ -564,75 +516,69 @@ public class AADS {
             this.map = new HashMap<String, Object>(initialCapacity);
         }
 
-        /**
-         * Construct a JSONObject from a source JSON text string (The mostly used constructor).
-         */
+        /* Construct a JSONObject from a source JSON text string (The mostly used constructor). */
         protected JSONObject(String source) throws JSONException {
             this(new JSONTokener(source));
         }
 
-        /**
-         * Construct a JSONObject from a JSONTokener.
-         */
+        /* Construct a JSONObject from a JSONTokener. */
         public JSONObject(JSONTokener x) throws JSONException {
             this(x, new JSONParserConfiguration());
         }
 
-        /**
-         * Construct a JSONObject from a JSONTokener with custom json parse configurations.
-         */
+        /* Construct a JSONObject from a JSONTokener with custom json parse configurations. */
         public JSONObject(JSONTokener x, JSONParserConfiguration jsonParserConfiguration) throws JSONException {
             this();
             char c;
             String key;
 
-            // 读取的第一个字符是{，表示是对象的开始；否则报错
+            // If the first read character is {, meaning that it is the start of an object, otherwise throw an exception
             if (x.nextClean() != '{') throw new JSONException("A JSONObject text must start with '{'.");
 
             while (true) {
-                c = x.nextClean(); // 读取下一个字符
+                c = x.nextClean(); // read next character
                 switch (c) {
-                    case 0: // 读取到文本结尾
+                    case 0: // read the end of the text
                         throw new JSONException("A JSONObject text must end with '}'.");
-                    case '}': // 读取到}，表示对象读取完毕
+                    case '}': // the reading procedure is finished
                         return;
-                    default: // 读取key
+                    default: // get the key
                         key = x.nextSimpleValue(c).toString();
                 }
 
-                // key、value通过冒号分隔
+                // key and value are separated by colon
                 c = x.nextClean();
                 if (c != ':') throw new JSONException("Expected a ':' after a key.");
 
                 if (key != null) {
                     boolean keyExists = this.opt(key) != null;
-                    // 若存在重复的key
+                    // If there exists duplicated keys, throw an exception
                     if (keyExists && !jsonParserConfiguration.isOverwriteDuplicateKey())
                         throw new JSONException("\"" + key + "\" is a duplicate key.");
 
-                    // 获取下一个值，若值非空，则加入map
+                    // If the next value is not null, then add it into the map
                     Object value = x.nextValue();
                     if (value != null) {
                         this.put(key, value);
                     }
                 }
 
-                // 键值对通过逗号分隔
+                // Key-value pairs are separated by commas
                 switch (x.nextClean()) {
                     case ';':
                     case ',':
-                        // 表示完成json对象的构建
+                        // Finish construction
                         if (x.nextClean() == '}') {
                             return;
                         }
-                        // JSON对象必须用{}包装内部
+                        // a JSONObject should use {} to wrap
                         if (x.end()) {
                             throw new JSONException("A JSONObject text must end with '}'.");
                         }
-                        // 此时表示：遇到逗号/分号，且下个字符不是}，则回退，解析新的键值对
+                        // We should go back one character and parse new key-value pairs
                         x.back();
                         break;
-                    case '}': // 表示完成json对象的构建
+                    case '}': // Finish construction
                         return;
                     default:
                         throw new JSONException("Expected a ',' or '}'.");
@@ -640,21 +586,16 @@ public class AADS {
             }
         }
 
-        /**
-         * Get an optional value associated with a key.
-         */
+        /* Get an optional value associated with a key. */
         public Object opt(String key) {
             if (key == null) {
                 return null;
             }
             return this.map.get(key);
-//            return key == null ? null : this.map.get(key);
         }
 
-        /**
-         * Get an optional JSONArray associated with a key.
-         * It returns null if there is no such key, or if its value is not a JSONArray.
-         */
+        /* Get an optional JSONArray associated with a key.
+         * It returns null if there is no such key, or if its value is not a JSONArray. */
         public JSONArray optJSONArray(String key) {
             return this.optJSONArray(key, null);
         }
@@ -664,10 +605,8 @@ public class AADS {
             return object instanceof JSONArray ? (JSONArray) object : defaultValue;
         }
 
-        /**
-         * Get an optional JSONObject associated with a key.
-         * It returns null if there is no such key, or if its value is not a JSONObject.
-         */
+        /* Get an optional JSONObject associated with a key.
+         * It returns null if there is no such key, or if its value is not a JSONObject. */
         public JSONObject optJSONObject(String key) {
             return this.optJSONObject(key, null);
         }
@@ -677,17 +616,13 @@ public class AADS {
             return object instanceof JSONObject ? (JSONObject) object : defaultValue;
         }
 
-        /**
-         * Put a key/value pair in the JSONObject.
-         * If the value is null, then the key will be removed from the JSONObject if it is present.
-         */
+        /* Put a key/value pair in the JSONObject.
+         * If the value is null, then the key will be removed from the JSONObject if it is present. */
         public JSONObject put(String key, Object value) throws JSONException {
             if (key == null) throw new NullPointerException("Null key.");
-
             if (value != null) {
-                verify(value); // 验证是否是合法的value
-
-                // 根据value的类型，分别执行不同的map.put方法
+                verify(value); // verify the value
+                // using different map.put method according to the type of value
                 if (value instanceof Boolean) { // 1.Boolean
                     this.map.put(key, (Boolean) value ? Boolean.TRUE : Boolean.FALSE);
                 } else if (value instanceof Double) { // 2.Double
@@ -698,11 +633,9 @@ public class AADS {
                     this.map.put(key, (Integer) value);
                 } else if (value instanceof Long) { // 5.Long
                     this.map.put(key, (Long) value);
-                } else if (value instanceof Collection<?>) { // 6.Array
-//                    this.map.put(key, new JSONArray((Collection<?>) value));
+                } else if (value instanceof Collection<?>) {
                 } else if (value instanceof Map<?, ?>) {
-//                    this.map.put(key, new JSONObject((Map<?, ?>) value));
-                } else { // 7.Object
+                } else { // 6.Object
                     this.map.put(key, value);
                 }
             } else {
@@ -715,17 +648,15 @@ public class AADS {
             return this.map.remove(key);
         }
 
-        /**
-         * Produce a string in double quotes with backslash sequences in all the right places.
-         */
+        /* Produce a string in double quotes with backslash sequences in all the right places. */
         @SuppressWarnings("resource")
         public static String quote(String string) {
-            // 字符串为空，返回""
+            // "" represents an empty string
             if (string == null || string.isEmpty()) {
                 return "\"\"";
             }
 
-            Writer sw = new StringBuilderWriter(string.length() + 2); // 大小要算上左右双引号
+            Writer sw = new StringBuilderWriter(string.length() + 2); // add the size of quotes
             try {
                 return quote(string, sw).toString();
             } catch (IOException ignored) {
@@ -733,68 +664,65 @@ public class AADS {
             }
         }
 
-        /**
-         * Quotes a string and appends the result to a given Writer.
-         */
+        /* Quotes a string and appends the result to a given Writer. */
         public static Writer quote(String string, Writer w) throws IOException {
-            // 字符串为空，返回""
+            // "" represents an empty string
             if (string == null || string.isEmpty()) {
                 w.write("\"\"");
                 return w;
             }
 
-            char b; // 上一个遍历的字符
-            char c = 0; // 当前遍历的字符
+            char b; // last traversed character
+            char c = 0; // current traversing character
             String hStr;
             int i;
             int len = string.length();
 
-            w.write('"'); // 写入左双引号
+            w.write('"'); // write the left double quote
 
-            // 遍历字符串
+            // iterating over a string
             for (i = 0; i < len; i++) {
                 b = c;
                 c = string.charAt(i);
                 switch (c) {
-                    case '\\': // 反斜杠
-                    case '"': // 双引号
+                    case '\\':
+                    case '"':
                         w.write('\\');
                         w.write(c);
                         break;
-                    case '/': // 左斜杠
-                        if (b == '<') { // 避免被认为是HTML/XML标签的开始
+                    case '/':
+                        if (b == '<') { // avoid being considered the start of an HTML/XML tag
                             w.write('\\');
                         }
                         w.write(c);
                         break;
-                    case '\b': // 退格
+                    case '\b':
                         w.write("\\b");
                         break;
-                    case '\t': // Tab制表符
+                    case '\t':
                         w.write("\\t");
                         break;
-                    case '\n': // 换行
+                    case '\n':
                         w.write("\\n");
                         break;
-                    case '\f': // 换页符
+                    case '\f':
                         w.write("\\f");
                         break;
-                    case '\r': // 回车
+                    case '\r':
                         w.write("\\r");
                         break;
                     default:
-                        if (c < ' ' || (c >= '\u0080' && c < '\u00a0') || (c >= '\u2000' && c < '\u2100')) { // ASCII码表中空格后的字符 / Unicode字符
+                        if (c < ' ' || (c >= '\u0080' && c < '\u00a0') || (c >= '\u2000' && c < '\u2100')) { // characters after space in ASCII code table / Unicode characters
                             w.write("\\u");
-                            hStr = Integer.toHexString(c); // 字符转为十六进制字符串
-                            w.write("0000", 0, 4 - hStr.length()); // 写入(4-hStr.length())个0
-                            w.write(hStr); // 写入0之外的其他字符
-                        } else { // 普通字符
+                            hStr = Integer.toHexString(c); // convert to hexadecimal string
+                            w.write("0000", 0, 4 - hStr.length()); // write (4 - hStr.length()) digit 0
+                            w.write(hStr); // write characters rather than digit 0
+                        } else { // ordinary characters
                             w.write(c);
                         }
                 }
             }
-
-            // 写入右双引号
+            // write the right double quote
             w.write('"');
             return w;
         }
@@ -807,9 +735,7 @@ public class AADS {
             return this.map.entrySet();
         }
 
-        /**
-         * Convert a string into a number, boolean, or null. If the string can't be converted, return the string.
-         */
+        /* Convert a string into a number, boolean, or null. If the string can't be converted, return the string. */
         public static Object stringToValue(String string) {
             if ("".equals(string)) {
                 return string;
@@ -825,7 +751,7 @@ public class AADS {
             }
 
             // Convert String to a number.
-            char initial = string.charAt(0); // 第一个字符
+            char initial = string.charAt(0);
             if ((initial >= '0' && initial <= '9') || initial == '-') {
                 try {
                     return stringToNumber(string);
@@ -835,62 +761,28 @@ public class AADS {
             return string;
         }
 
-        /**
-         * Check whether the val is a decimal.
-         */
+        /* Check whether the val is a decimal. */
         protected static boolean isDecimalNotation(final String val) {
             return val.indexOf('.') > -1 || val.indexOf('e') > -1 || val.indexOf('E') > -1 || "-0".equals(val);
         }
 
-        /**
-         * 将String转换为Number(使用尽可能窄的类型)
-         * 可能返回BigDecimal、Double、BigInteger、Long、Integer
-         * 若返回Double，它应始终是有效的Double，而不是NaN或+-infinity
-         */
+        /* convert the String to Number */
         protected static Number stringToNumber(final String val) throws NumberFormatException {
             char initial = val.charAt(0);
             if ((initial >= '0' && initial <= '9') || initial == '-') {
-                // 若是小数
-                if (isDecimalNotation(val)) {
-                    // 使用BigDecimal，以保留原始表示
+                if (isDecimalNotation(val)) { // decimal
                     try {
-                        BigDecimal bd = new BigDecimal(val);
-                        // 由于BigDecimal不支持-0.0，这里强制使用小数
+                        BigDecimal bd = new BigDecimal(val); // keep original representation
+                        // Since BigDecimal does not support -0.0, decimals are forced to be used here
                         if (initial == '-' && BigDecimal.ZERO.compareTo(bd) == 0) {
                             return Double.valueOf(-0.0);
                         }
                         return bd;
-                    } catch (NumberFormatException retryAsDouble) {
-                        // TODO 涉及16进制表示，暂不实现
+                    } catch (NumberFormatException retryAsDouble) { // no need to implement in this project
                         System.out.println("Hex Floats related contents are not available now.");
-//                        // this is to support "Hex Floats" like this: 0x1.0P-1074
-//                        try {
-//                            Double d = Double.valueOf(val);
-//                            if (d.isNaN() || d.isInfinite()) {
-//                                throw new NumberFormatException("val [" + val + "] is not a valid number.");
-//                            }
-//                            return d;
-//                        } catch (NumberFormatException ignore) {
-//                            throw new NumberFormatException("val [" + val + "] is not a valid number.");
-//                        }
                     }
                 }
-
-                // TODO  处理八进制Octal，暂不实现
-//                if (initial == '0' && val.length() > 1) {
-//                    char at1 = val.charAt(1);
-//                    if (at1 >= '0' && at1 <= '9') {
-//                        throw new NumberFormatException("val [" + val + "] is not a valid number.");
-//                    }
-//                } else if (initial == '-' && val.length() > 2) {
-//                    char at1 = val.charAt(1);
-//                    char at2 = val.charAt(2);
-//                    if (at1 == '0' && at2 >= '0' && at2 <= '9') {
-//                        throw new NumberFormatException("val [" + val + "] is not a valid number.");
-//                    }
-//                }
-
-                // 处理整数（将所有值缩小到最小的合理对象表示：Integer, Long, BigInteger）
+                // deal with integers
                 BigInteger bi = new BigInteger(val);
                 if (bi.bitLength() <= 31) {
                     return Integer.valueOf(bi.intValue());
@@ -903,37 +795,25 @@ public class AADS {
             throw new NumberFormatException("Value [" + val + "] is not a valid number.");
         }
 
-        /**
-         * Produce a string from a Number.
-         */
+        /* Produce a string from a Number. */
         public static String numberToString(Number number) throws JSONException {
             if (number == null) throw new JSONException("Null pointer.");
-            verify(number); // 验证number的合法性
+            verify(number);
 
             String string = number.toString();
             if (string.indexOf('.') > 0 && string.indexOf('e') < 0 && string.indexOf('E') < 0) {
-                // 删除尾随零
-                while (string.endsWith("0")) {
+                while (string.endsWith("0")) { // remove trailing zeros
                     string = string.substring(0, string.length() - 1);
                 }
-                // 删除小数点
-                if (string.endsWith(".")) {
+                if (string.endsWith(".")) { // remove decimal point
                     string = string.substring(0, string.length() - 1);
                 }
             }
             return string;
         }
 
-        /**
-         * If { indentFactor > 0 } and the JSONObject has only one key, the object will be output on a single line:
-         * {"key": 1}
-         * If an object has 2 or more keys, it will be output across multiple lines:
-         * {
-         * "key1": 1,
-         * "key2": "value 2",
-         * "key3": 3
-         * }
-         */
+        /* If { indentFactor > 0 } and the JSONObject has only one key, the object will be output on a single line
+         * If an object has 2 or more keys, it will be output across multiple lines */
         @Override
         public String toString() {
             try {
@@ -951,22 +831,10 @@ public class AADS {
             return this.write(w, indentFactor, 0).toString();
         }
 
-//        /**
-//         * Write the contents of the JSONObject as JSON text to a writer. For
-//         * compactness, no whitespace is added.
-//         *
-//         * Warning: This method assumes that the data structure is acyclical.
-//         */
-//        public Writer write(Writer writer) throws JSONException {
-//            return this.write(writer, 0, 0);
-//        }
-
-        /**
-         * Returns a java.util.Map containing all of the entries in this object.
-         */
+        /* Returns a java.util.Map containing all of the entries in this object. */
         public Map<String, Object> toMap() {
             Map<String, Object> results = new HashMap<String, Object>();
-            for (Entry<String, Object> entry : this.entrySet()) { // 遍历所有entries
+            for (Entry<String, Object> entry : this.entrySet()) {
                 Object value;
                 if (entry.getValue() == null || NULL.equals(entry.getValue())) {
                     value = null;
@@ -982,9 +850,7 @@ public class AADS {
             return results;
         }
 
-        /**
-         * add indents
-         */
+        /* add indents */
         protected static void indent(Writer writer, int indent) throws IOException {
             for (int i = 0; i < indent; i++) {
                 writer.write(' ');
@@ -994,47 +860,33 @@ public class AADS {
         @SuppressWarnings("resource")
         public Writer write(Writer writer, int indentFactor, int indent) throws JSONException {
             try {
-                boolean needsComma = false; // 是否需要逗号
-                final int length = this.length(); // map的长度
+                boolean needsComma = false;
+                final int length = this.length(); // length of the map
 
-                // 写入对象的开始标记
                 writer.write('{');
-
-                // 只有一个键值对，最终显示为一行
                 if (length == 1) {
-                    final Entry<String, ?> entry = this.entrySet().iterator().next(); // 获取entry
-                    final String key = entry.getKey(); // 获取key
-                    writer.write(quote(key)); // 将key转为带双引号的字符串并写入
-                    writer.write(':'); // 写入key、value的分隔符
-
-                    // 写入indentFactor个缩进
-                    if (indentFactor > 0) {
+                    final Entry<String, ?> entry = this.entrySet().iterator().next();
+                    final String key = entry.getKey();
+                    writer.write(quote(key)); // convert key to a double-quoted string and write
+                    writer.write(':'); // : used to separate the key and value
+                    if (indentFactor > 0) { // write intents
                         writer.write(' ');
                     }
-
-                    // 写入具体value
-                    try {
+                    try { // write values
                         writeValue(writer, entry.getValue(), indentFactor, indent);
                     } catch (Exception e) {
                         throw new JSONException("Unable to write JSONObject value for key: " + key, e);
                     }
-                } else if (length != 0) {
-                    // 有多个键值对，最终显示为多行
+                } else if (length != 0) { // display as multiple lines
                     final int newIndent = indent + indentFactor;
-
-                    // 遍历所有entries
                     for (final Entry<String, ?> entry : this.entrySet()) {
-                        if (needsComma) { // 需要逗号
+                        if (needsComma) {
                             writer.write(',');
                         }
-
-                        // 缩进数>0，则另起一行，写入缩进
-                        if (indentFactor > 0) {
+                        if (indentFactor > 0) { // start a new line and write intents
                             writer.write('\n');
                         }
                         indent(writer, newIndent);
-
-                        // 获取key，写入带双引号的key、冒号、缩进、具体value
                         final String key = entry.getKey();
                         writer.write(quote(key));
                         writer.write(':');
@@ -1046,16 +898,14 @@ public class AADS {
                         } catch (Exception e) {
                             throw new JSONException("Unable to write JSONObject value for key: " + key, e);
                         }
-                        needsComma = true; // 每个entry的最后需要有逗号
+                        needsComma = true; // every entry should have a comma at the end
                     }
-
-                    // 最后一个entry遍历后换行，写入缩进
                     if (indentFactor > 0) {
                         writer.write('\n');
                     }
                     indent(writer, indent);
                 }
-                writer.write('}'); // json对象的结束标志
+                writer.write('}'); // end
                 return writer;
             } catch (IOException exception) {
                 throw new JSONException(exception);
@@ -1069,38 +919,26 @@ public class AADS {
             } else if (value instanceof JSONString) {
                 Object o;
                 try {
-                    o = ((JSONString) value).toJSONString(); // 将value转换为JSONString
+                    o = ((JSONString) value).toJSONString();
                 } catch (Exception e) {
                     throw new JSONException(e);
                 }
                 writer.write(o != null ? o.toString() : quote(value.toString()));
-            } else if (value instanceof String) { // The mostly used branch.
+            } else if (value instanceof String) { // The mostly used branch
                 quote(value.toString(), writer);
                 return writer;
             } else if (value instanceof Number) {
                 final String numberAsString = numberToString((Number) value);
-                if (NUMBER_PATTERN.matcher(numberAsString).matches()) { // 是JSON的Number类型
+                if (NUMBER_PATTERN.matcher(numberAsString).matches()) { // is a Number
                     writer.write(numberAsString);
-                } else { // 转换为带双引号的字符串
+                } else { // convert to a double-quoted string
                     quote(numberAsString, writer);
                 }
             } else if (value instanceof Boolean) {
                 writer.write(value.toString());
-//            } else if (value instanceof Enum<?>) {
-//                writer.write(quote(((Enum<?>)value).name()));
             } else if (value instanceof JSONObject) {
                 ((JSONObject) value).write(writer, indentFactor, indent);
-//            } else if (value instanceof JSONArray) {
-//                ((JSONArray) value).write(writer, indentFactor, indent);
-//            } else if (value instanceof Map) {
-//                Map<?, ?> map = (Map<?, ?>) value;
-//                new JSONObject(map).write(writer, indentFactor, indent);
-//            } else if (value instanceof Collection) {
-//                Collection<?> coll = (Collection<?>) value;
-//                new JSONArray(coll).write(writer, indentFactor, indent);
-//            } else if (value.getClass().isArray()) {
-//                new JSONArray(value).write(writer, indentFactor, indent);
-            } else { // 其他类型，则转化为带双引号的字符串
+            } else { // other types, converting to strings
                 quote(value.toString(), writer);
             }
             return writer;
@@ -1121,43 +959,39 @@ public class AADS {
 
         public JSONArray(JSONTokener x) throws JSONException {
             this();
-            // JSON数组的第一个符号必须是[
+            // the first character must be [
             if (x.nextClean() != '[') {
                 throw new JSONException("A JSONArray text must start with '['.");
             }
-
-            char nextChar = x.nextClean(); // 获取下一个字符
-            if (nextChar == 0) { // 读取到文本结尾，但不是]，则抛出异常
+            char nextChar = x.nextClean(); // read next character
+            if (nextChar == 0) { // the end of the text is not ], then throw an exception
                 throw new JSONException("Expected a ',' or ']'.");
             }
-
-            // 只要不是]，就循环
             if (nextChar != ']') {
-                x.back(); // 回退一个字符
+                x.back(); // go back a character
                 while (true) {
-                    if (x.nextClean() == ',') { // 逗号，表示数组为空
+                    if (x.nextClean() == ',') { // meaning the array is empty
                         x.back();
                         this.myArrayList.add(JSONObject.NULL);
-                    } else { // 添加下一个值
+                    } else { // add next value
                         x.back();
                         this.myArrayList.add(x.nextValue());
                     }
-
-                    // 处理结尾
+                    // deal with the end
                     switch (x.nextClean()) {
-                        case 0: // 读取到文本结尾，但不是]，则抛出异常
+                        case 0: // the end of the text is not ], then throw an exception
                             throw new JSONException("Expected a ',' or ']'.");
                         case ',':
                             nextChar = x.nextClean();
-                            if (nextChar == 0) { // 读取到文本结尾，但不是]，则抛出异常
+                            if (nextChar == 0) { // the end of the text is not ], then throw an exception
                                 throw new JSONException("Expected a ',' or ']'.");
                             }
-                            if (nextChar == ']') { // 表示完成JSONArray的构造
+                            if (nextChar == ']') { // finish construction
                                 return;
                             }
                             x.back();
-                            break; // 退出switch继续循环
-                        case ']': // 表示完成JSONArray的构造
+                            break;
+                        case ']': // finish construction
                             return;
                         default:
                             throw new JSONException("Expected a ',' or ']'.");
@@ -1166,44 +1000,12 @@ public class AADS {
             }
         }
 
-        /**
-         * Construct a JSONArray from a source JSON text (The mostly used constructor).
-         */
+        /* Construct a JSONArray from a source JSON text (The mostly used constructor). */
         public JSONArray(String source) throws JSONException {
             this(new JSONTokener(source));
         }
 
-        /**
-         * Construct a JSONArray from a Collection.
-         */
-//        public JSONArray(Collection<?> collection, JSONParserConfiguration jsonParserConfiguration) {
-//            this(collection, 0, jsonParserConfiguration);
-//        }
-
-        /**
-         * Construct a JSONArray from a Collection.
-         */
-//        public JSONArray(Collection<?> collection) {
-//            this(collection, 0, new JSONParserConfiguration());
-//        }
-
-        /**
-         * Construct a JSONArray from a collection with recursion depth.
-         */
-//        public JSONArray(Collection<?> collection, int recursionDepth, JSONParserConfiguration jsonParserConfiguration) {
-//            if (recursionDepth > jsonParserConfiguration.getMaxNestingDepth())
-//                throw new JSONException("JSONArray has reached recursion depth limit of " + jsonParserConfiguration.getMaxNestingDepth());
-//            if (collection == null) {
-//                this.myArrayList = new ArrayList<Object>();
-//            } else {
-//                this.myArrayList = new ArrayList<Object>(collection.size());
-//                this.addAll(collection, true, recursionDepth, jsonParserConfiguration);
-//            }
-//        }
-
-        /**
-         * Construct a JSONArray from another JSONArray (shallow copy).
-         */
+        /* Construct a JSONArray from another JSONArray (shallow copy). */
         public JSONArray(JSONArray array) {
             if (array == null) {
                 this.myArrayList = new ArrayList<Object>();
@@ -1212,24 +1014,6 @@ public class AADS {
             }
         }
 
-        /**
-         * Construct a JSONArray from an Iterable (shallow copy).
-         */
-//        public JSONArray(Iterable<?> iter) {
-//            this();
-//            if (iter == null) return;
-//            this.addAll(iter, true);
-//        }
-
-        /**
-         * Construct a JSONArray from an array.
-         */
-//        public JSONArray(Object array) throws JSONException {
-//            this();
-//            if (!array.getClass().isArray())
-//                throw new JSONException("JSONArray initial value should be a string or collection or array.");
-//            this.addAll(array, true, 0);
-//        }
         @Override
         public Iterator<Object> iterator() {
             return this.myArrayList.iterator();
@@ -1243,25 +1027,19 @@ public class AADS {
             this.myArrayList.clear();
         }
 
-        /**
-         * Get the optional object value associated with an index.
-         */
+        /* Get the optional object value associated with an index. */
         public Object opt(int index) {
             if (index < 0 || index >= this.length()) {
                 return null;
             } else {
                 return this.myArrayList.get(index);
             }
-//            return (index < 0 || index >= this.length()) ? null : this.myArrayList.get(index);
         }
 
-        /**
-         * Append an object value. This increases the array's length by one.
-         */
+        /* Append an object value. This increases the array's length by one. */
         public JSONArray put(Object value) {
             JSONObject.verify(value);
-
-            // 根据value的类型，分别执行不同的array.add方法
+            // using different arrayList.add method according to the type of value
             if (value instanceof Boolean) { // 1.Boolean
                 this.myArrayList.add((Boolean) value ? Boolean.TRUE : Boolean.FALSE);
             } else if (value instanceof Double) { // 2.Double
@@ -1272,45 +1050,34 @@ public class AADS {
                 this.myArrayList.add((Integer) value);
             } else if (value instanceof Long) { // 5.Long
                 this.myArrayList.add((Long) value);
-            } else if (value instanceof Collection<?>) { // 6.Array
-//                this.myArrayList.add(new JSONArray((Collection<?>) value));
+            } else if (value instanceof Collection<?>) {
             } else if (value instanceof Map<?, ?>) {
-
-            } else { // 7.Object
+            } else { // 6.Object
                 this.myArrayList.add(value);
             }
             return this;
         }
 
-        /**
-         * Put or replace an object value in the JSONArray.
-         * 如果index > JSONArray.length，则按需添加空元素进行填充
-         */
+        /* Put or replace an object value in the JSONArray. */
         public JSONArray put(int index, Object value) throws JSONException {
             if (index < 0) throw new JSONException("JSONArray[" + index + "] not found.");
-
-            // 只要在数组下标范围内
+            // it is within the array index range
             if (index < this.length()) {
                 JSONObject.verify(value);
                 this.myArrayList.set(index, value);
                 return this;
             }
-
-            // 若是最后一个位置，则调用put()添加一个
+            // if it is the last position, call put() to add a new element
             if (index == this.length()) {
                 return this.put(value);
             }
-
-            // if we are inserting past the length, we want to grow the array all at once instead of incrementally.
-            // 如果插入的内容超过了长度，希望一次性增加数组，而不是逐步增加
+            // if we are inserting past the length, we want to grow the array all at once instead of incrementally
             this.myArrayList.ensureCapacity(index + 1); // 指定容量+1
-
-            // 用JSONObject.NULL对象填充剩余的空位
+            // fulfil the remaining empty positions with JSONObject.NULL object
             while (index != this.length()) {
                 this.myArrayList.add(JSONObject.NULL);
             }
-
-            // 其余情况，put值，并在put()中对value类型进行分类判断
+            // otherwise, put value
             return this.put(value);
         }
 
@@ -1320,63 +1087,27 @@ public class AADS {
             } else {
                 return null;
             }
-//            return index >= 0 && index < this.length()
-//                    ? this.myArrayList.remove(index)
-//                    : null;
         }
 
-        // TODO  这里的putAll后面尝试进行合并，目前先分开放
-        // TODO   putAll()先实现参数为JSONArray array的那个
-        /**
-         * Put a collection's elements in to the JSONArray.
-         */
-//        public JSONArray putAll(Collection<?> collection) {
-//            this.addAll(collection, false);
-//            return this;
-//        }
-
-        /**
-         * Put an Iterable's elements in to the JSONArray.
-         */
-//        public JSONArray putAll(Iterable<?> iter) {
-//            this.addAll(iter, false);
-//            return this;
-//        }
-
-        /**
-         * Put a JSONArray's elements in to the JSONArray (shallow copy).
-         */
+        /* Put a JSONArray's elements in to the JSONArray (shallow copy). */
         public JSONArray putAll(JSONArray array) {
             this.myArrayList.addAll(array.myArrayList);
             return this;
         }
 
-        /**
-         * Put an array's elements in to the JSONArray.
-         */
-//        public JSONArray putAll(Object array) throws JSONException {
-//            this.addAll(array, false);
-//            return this;
-//        }
-
-        /**
-         * Returns a java.util.List containing all of the elements in this array.
+        /* Returns a java.util.List containing all of the elements in this array.
          * If an element in the array is a JSONArray or JSONObject it will also be converted to a List and a Map respectively.
-         * Warning: This method assumes that the data structure is acyclical.
-         */
+         * Warning: This method assumes that the data structure is acyclical. */
         public List<Object> toList() {
             List<Object> result = new ArrayList<Object>(this.myArrayList.size());
-            // 遍历数组列表
             for (Object element : this.myArrayList) {
-                if (element == null || JSONObject.NULL.equals(element)) { // 1.空
+                if (element == null || JSONObject.NULL.equals(element)) { // 1.NULL
                     result.add(null);
-                } else if (element instanceof JSONArray) { // 2.JSON数组
+                } else if (element instanceof JSONArray) { // 2.JSONArray
                     result.add(((JSONArray) element).toList());
-                } else if (element instanceof JSONObject) { // 3.JSON对象
-                    // TODO  待定实现
+                } else if (element instanceof JSONObject) { // 3.JSONObject
                     result.add(((JSONObject) element).toMap());
-//                    System.out.println("The method toMap() is not supported now.");
-                } else { // 4.其他类型
+                } else { // 4.other types
                     result.add(element);
                 }
             }
@@ -1387,86 +1118,7 @@ public class AADS {
             return this.myArrayList.isEmpty();
         }
 
-//        /**
-//         * Add a collection's elements to the JSONArray.
-//         */
-//        private void addAll(Collection<?> collection, boolean wrap, int recursionDepth, JSONParserConfiguration jsonParserConfiguration) {
-//            // 将集合collection的大小加入ArrayList的大小
-//            this.myArrayList.ensureCapacity(this.myArrayList.size() + collection.size());
-//
-//            if (wrap) {
-//                for (Object o: collection){
-//                    this.put(JSONObject.wrap(o, recursionDepth + 1, jsonParserConfiguration));
-//                }
-//            } else {
-//                for (Object o: collection){
-//                    this.put(o);
-//                }
-//            }
-//        }
-//
-//        /**
-//         * Add an Iterable's elements to the JSONArray.
-//         */
-//        private void addAll(Iterable<?> iter, boolean wrap) {
-//            if (wrap) {
-//                for (Object o: iter){
-//                    this.put(JSONObject.wrap(o));
-//                }
-//            } else {
-//                for (Object o: iter){
-//                    this.put(o);
-//                }
-//            }
-//        }
-//
-//        /**
-//         * Add an array's elements to the JSONArray.
-//         */
-//        private void addAll(Object array, boolean wrap) throws JSONException {
-//            this.addAll(array, wrap, 0);
-//        }
-//
-//        /**
-//         * Add an array's elements to the JSONArray.
-//         */
-//        private void addAll(Object array, boolean wrap, int recursionDepth) {
-//            addAll(array, wrap, recursionDepth, new JSONParserConfiguration());
-//        }
-//
-//        /**
-//         * Add an array's elements to the JSONArray.
-//         */
-//        private void addAll(Object array, boolean wrap, int recursionDepth, JSONParserConfiguration jsonParserConfiguration) throws JSONException {
-//            // 判断array的类型
-//            if (array.getClass().isArray()) { // 数组
-//                int length = Array.getLength(array); // 获取数组长度
-//                this.myArrayList.ensureCapacity(this.myArrayList.size() + length); // 扩充原数组列表的大小
-//
-//                // 是否需要包装
-//                if (wrap) {
-//                    for (int i = 0; i < length; i++) {
-//                        this.put(JSONObject.wrap(Array.get(array, i), recursionDepth + 1, jsonParserConfiguration));
-//                    }
-//                } else {
-//                    for (int i = 0; i < length; i++) {
-//                        this.put(Array.get(array, i));
-//                    }
-//                }
-//            } else if (array instanceof JSONArray) { // JSON数组（浅拷贝）
-//                this.myArrayList.addAll(((JSONArray)array).myArrayList);
-//            } else if (array instanceof Collection) { // 集合
-//                this.addAll((Collection<?>)array, wrap, recursionDepth, jsonParserConfiguration);
-//            } else if (array instanceof Iterable) { // 可迭代对象
-//                this.addAll((Iterable<?>)array, wrap);
-//            } else {
-//                throw new JSONException("JSONArray initial value should be a string or collection or array.");
-//            }
-//        }
-
-        /**
-         * Get the string associated with an index.
-         */
+        /* Get the string associated with an index. */
         public String getString(int index) throws JSONException {
             Object object = this.opt(index);
             if (object instanceof String) {
@@ -1475,9 +1127,7 @@ public class AADS {
             throw new JSONException(index + " String " + object + " " + null + ".");
         }
 
-        /**
-         * Produce a JSONObject by combining a JSONArray of names with the values of this JSONArray.
-         */
+        /* Produce a JSONObject by combining a JSONArray of names with the values of this JSONArray. */
         public JSONObject toJSONObject(JSONArray names) throws JSONException {
             if (names == null || names.isEmpty() || this.isEmpty()) return null;
 
@@ -1488,16 +1138,8 @@ public class AADS {
             return jo;
         }
 
-        /**
-         * If { indentFactor > 0 } and the JSONArray has only one element, the array will be output on a single line:
-         * [1]
-         * If an array has 2 or more elements, then it will be output across multiple lines:
-         * [
-         * 1,
-         * "value 2",
-         * 3
-         * ]
-         */
+        /* If { indentFactor > 0 } and the JSONArray has only one element, the array will be output on a single line
+         * If an array has 2 or more elements, then it will be output across multiple lines */
         @Override
         public String toString() {
             try {
@@ -1514,9 +1156,7 @@ public class AADS {
             return this.write(sw, indentFactor, 0).toString();
         }
 
-        /**
-         * Write the contents of the JSONArray as JSON text to a writer. No whitespace is added.
-         */
+        /* Write the contents of the JSONArray as JSON text to a writer. No whitespace is added. */
         public Writer write(Writer writer) throws JSONException {
             return this.write(writer, 0, 0);
         }
@@ -1524,13 +1164,10 @@ public class AADS {
         @SuppressWarnings("resource")
         public Writer write(Writer writer, int indentFactor, int indent) throws JSONException {
             try {
-                boolean needsComma = false; // 是否需要逗号
-                int length = this.length(); // map的长度
-
-                // 写入数组的开始标记
+                boolean needsComma = false;
+                int length = this.length(); // the length of map
+                // the start of an JSONArray
                 writer.write('[');
-
-                // 只有一个元素，最终显示为一行
                 if (length == 1) {
                     try {
                         JSONObject.writeValue(writer, this.myArrayList.get(0), indentFactor, indent);
@@ -1538,50 +1175,38 @@ public class AADS {
                         throw new JSONException("Unable to write JSONArray value at index: 0", e);
                     }
                 } else if (length != 0) {
-                    // 有多个元素，最终显示为多行
+                    // display as multiple lines
                     final int newIndent = indent + indentFactor;
-
-                    // 遍历所有元素
                     for (int i = 0; i < length; i++) {
-                        if (needsComma) { // 需要逗号
+                        if (needsComma) {
                             writer.write(',');
                         }
-
-                        // 缩进数>0，则另起一行，写入缩进
+                        // start a new line and write indents
                         if (indentFactor > 0) {
                             writer.write('\n');
                         }
                         JSONObject.indent(writer, newIndent);
-
-                        // 写入每个元素的值
+                        // write values
                         try {
                             JSONObject.writeValue(writer, this.myArrayList.get(i),
                                     indentFactor, newIndent);
                         } catch (Exception e) {
                             throw new JSONException("Unable to write JSONArray value at index: " + i, e);
                         }
-                        needsComma = true; // 每个元素的最后需要有逗号
+                        needsComma = true; // every element should have a comma at the end
                     }
-
-                    // 最后一个元素遍历后换行，写入缩进
                     if (indentFactor > 0) {
                         writer.write('\n');
                     }
                     JSONObject.indent(writer, indent);
                 }
-                writer.write(']'); // json数组的结束标志
+                writer.write(']'); // the end of the JSONArray
                 return writer;
             } catch (IOException e) {
                 throw new JSONException(e);
             }
         }
     }
-
-    /* Part: AdjacencyList Graph */
-//    protected interface Entry<K, V> {
-//        K getKey();
-//        V getValue();
-//    }
 
     protected interface Tuple<A, B> {
         A getFirst();
@@ -1618,17 +1243,12 @@ public class AADS {
 
         Edge<E> getEdge(Vertex<V> u, Vertex<V> v) throws IllegalArgumentException;
 
-        /**
-         * Returns the vertices of edge e as an array of length two.
-         * If the graph is directed, the first vertex is the origin, and
-         * the second is the destination.  If the graph is undirected, the
-         * order is arbitrary.
-         */
+        /* Returns the vertices of edge e as an array of length two.
+         * If the graph is directed, the first vertex is the origin, and the second is the destination.
+         * If the graph is undirected, the order is arbitrary. */
         Vertex<V>[] endVertices(Edge<E> e) throws IllegalArgumentException;
 
-        /**
-         * Returns the vertex that is opposite vertex v on edge e.
-         */
+        /* Returns the vertex that is opposite vertex v on edge e. */
         Vertex<V> opposite(Vertex<V> v, Edge<E> e) throws IllegalArgumentException;
 
         Vertex<V> insertVertex(V element);
@@ -1667,9 +1287,7 @@ public class AADS {
     }
 
     protected interface Position<E> {
-        /**
-         * Returns the element stored at this position.
-         */
+        /* Returns the element stored at this position. */
         E getElement() throws IllegalStateException;
     }
 
@@ -1682,14 +1300,10 @@ public class AADS {
 
         Position<E> last();
 
-        /**
-         * 返回位置p的前一个位置
-         */
+        /* return the position before position p */
         Position<E> before(Position<E> p) throws IllegalArgumentException;
 
-        /**
-         * 返回位置p的后一个位置
-         */
+        /* return the position after position p */
         Position<E> after(Position<E> p) throws IllegalArgumentException;
 
         Position<E> addFirst(E e);
@@ -1706,19 +1320,15 @@ public class AADS {
 
         E remove(Position<E> p) throws IllegalArgumentException;
 
-        /**
-         * 返回存储在列表中的元素的迭代器
-         */
+        /* return an iterator over the elements stored in the list */
         Iterator<E> iterator();
 
-        /**
-         * 以可迭代形式，返回从第一个到最后一个返回列表的位置
-         */
+        /* return the position of the returned list from the first to the last in an iterable form */
         Iterable<Position<E>> positions();
     }
 
     /**
-     * 双向链表，实现存储的位置列表
+     * doubly Linked List
      */
     protected static class LinkedPositionalList<E> implements PositionalList<E> {
         private static class Node<E> implements Position<E> {
@@ -1758,11 +1368,11 @@ public class AADS {
             }
         }
 
-        private Node<E> header; // 头结点
+        private Node<E> header;
 
-        private Node<E> trailer; // 尾结点
+        private Node<E> trailer;
 
-        private int size = 0; // 列表的元素个数（不含头尾结点）
+        private int size = 0; // number of elements in the list (except the head and tail nodes)
 
         public LinkedPositionalList() {
             header = new Node<>(null, null, null);
@@ -1770,9 +1380,7 @@ public class AADS {
             header.setNext(trailer); // header -> trailer
         }
 
-        /**
-         * 验证某个position是否属于相应类别，且不能是已被删除的（未验证该position是否属于此特定列表实例）
-         */
+        /* verify whether a position belongs to the corresponding category and cannot be deleted */
         private Node<E> validate(Position<E> p) throws IllegalArgumentException {
             if (!(p instanceof Node)) throw new IllegalArgumentException("Invalid p");
             Node<E> node = (Node<E>) p;
@@ -1780,9 +1388,7 @@ public class AADS {
             return node;
         }
 
-        /**
-         * 将给定的节点作为位置返回；若是哨兵，则返回null，避免暴露哨兵
-         */
+        /* return the given node as a position. If it is a sentinel, return null. */
         private Position<E> position(Node<E> node) {
             if (node == header || node == trailer) return null;
             return node;
@@ -1881,13 +1487,11 @@ public class AADS {
             return answer;
         }
 
-        /**
-         * 返回列表位置的可迭代表示
-         */
-        // 每个实例都包含对包含列表的隐式引用，使得能直接调用列表的方法
+        /* return an iterable representation of the list positions
+         * each instance contains an implicit reference to the containing list, allowing methods of the list to be called directly */
         private class PositionIterator implements Iterator<Position<E>> {
-            private Position<E> cursor = first(); // 指向下一个遍历的元素
-            private Position<E> recent = null; // 最近遍历的元素
+            private Position<E> cursor = first(); // point to next element to be traversed
+            private Position<E> recent = null; // recently traversed element
 
             public boolean hasNext() {
                 return (cursor != null);
@@ -1895,15 +1499,15 @@ public class AADS {
 
             public Position<E> next() throws NoSuchElementException {
                 if (cursor == null) throw new NoSuchElementException("nothing left");
-                recent = cursor; // 遍历下一个位置
-                cursor = after(cursor); // cursor指向下一个位置
+                recent = cursor; // go to the next position
+                cursor = after(cursor); // point to next position
                 return recent;
             }
 
             public void remove() throws IllegalStateException {
                 if (recent == null) throw new IllegalStateException("nothing to remove");
-                LinkedPositionalList.this.remove(recent); // 移除最近访问的位置
-                recent = null; // 避免再次移除
+                LinkedPositionalList.this.remove(recent); // remove the position visited recently
+                recent = null; // avoid being removed again
             }
         }
 
@@ -1918,9 +1522,7 @@ public class AADS {
             return new PositionIterable();
         }
 
-        /**
-         * 返回列表元素的可迭代表示
-         */
+        /* return an iterable representation of the list elements */
         private class ElementIterator implements Iterator<E> {
             Iterator<Position<E>> posIterator = new PositionIterator();
 
@@ -1942,9 +1544,6 @@ public class AADS {
             return new ElementIterator();
         }
 
-        /**
-         * Debugging
-         */
         public String toString() {
             StringBuilder sb = new StringBuilder("(");
             Node<E> walk = header.getNext();
@@ -1969,12 +1568,11 @@ public class AADS {
             private K k; // key
             private V v; // value
 
-            public MapEntry(K key, V value) { //构造器
+            public MapEntry(K key, V value) {
                 k = key;
                 v = value;
             }
 
-            // Entry interface的公共方法
             public K getKey() {
                 return k;
             }
@@ -1984,13 +1582,13 @@ public class AADS {
             }
 
             public void setKey(K key) {
-                k = key; //赋值新key
+                k = key;
             }
 
             public V setValue(V value) {
-                V old = v; //旧值
-                v = value; //赋值新value
-                return old; //返回旧值
+                V old = v;
+                v = value;
+                return old;
             }
 
             public String toString() {
@@ -2003,18 +1601,15 @@ public class AADS {
          */
         private class InnerVertex<V> implements Vertex<V> {
             private V element;
-            private Position<Vertex<V>> pos; // 顶点在图中的位置
-            private List<Vertex<V>> adjVert; // 与该顶点相邻的顶点列表
+            private Position<Vertex<V>> pos; // the position of vertex in the graph
+            private List<Vertex<V>> adjVert; // adjacency list
 
             public InnerVertex(V elem, boolean graphIsDirected) {
                 element = elem;
-                // 初始化存储 邻接顶点 的列表
                 adjVert = new ArrayList<>();
             }
 
-            /**
-             * 验证此顶点实例属于给定的图
-             */
+            /* verify whether this vertex instance belongs to the given graph */
             public boolean validate(Graph<V, E> graph) {
                 return (AdjacencyListGraph.this == graph && pos != null);
             }
@@ -2023,23 +1618,15 @@ public class AADS {
                 return element;
             }
 
-            /**
-             * 将 该顶点的位置p 存储在图的顶点列表中
-             */
+            /* store the position p of the vertex in the vertex list of the graph */
             public void setPosition(Position<Vertex<V>> p) {
                 pos = p;
             }
 
-            /**
-             * 返回该顶点在图的顶点列表中的位置
-             */
             public Position<Vertex<V>> getPosition() {
                 return pos;
             }
 
-            /**
-             * 返回 该顶点的相邻结点 的列表
-             */
             public List<Vertex<V>> getAdjVert() {
                 return adjVert;
             }
@@ -2071,30 +1658,19 @@ public class AADS {
                 return element;
             }
 
-            /**
-             * 返回端点的数组
-             */
             public Vertex<V>[] getEndpoints() {
                 return endpoints;
             }
 
-            /**
-             * 验证此边实例属于给定的图
-             */
+            /* verify whether this edge instance belongs to the given graph */
             public boolean validate(Graph<V, E> graph) {
                 return AdjacencyListGraph.this == graph && pos != null;
             }
 
-            /**
-             * 将此边的位置存储在图的顶点列表内
-             */
             public void setPosition(Position<Edge<E>> p) {
                 pos = p;
             }
 
-            /**
-             * 返回此边在图的顶点列表中的位置
-             */
             public Position<Edge<E>> getPosition() {
                 return pos;
             }
@@ -2112,7 +1688,6 @@ public class AADS {
             isDirected = directed;
         }
 
-        // 图的具体实现
         public int numVertices() {
             return vertices.size();
         }
@@ -2125,11 +1700,7 @@ public class AADS {
             return edges.size();
         }
 
-        //        public Iterable<Edge<E>> edges() {
-        //            return edges;
-        //        }
-
-        // reconstruct this method, outputting the edge with its end vertices
+        // TODO  reconstruct edge() method, outputting the edge with its end vertices
         public Iterable<Tuple<Edge<E>, List<Vertex<V>>>> edges() {
             for (Edge<E> edge : edges) {
                 Vertex<V>[] vert = endVertices(edge);
@@ -2149,9 +1720,8 @@ public class AADS {
 
         public Iterable<Edge<E>> outgoingEdges(Vertex<V> v) throws IllegalArgumentException {
             InnerVertex<V> vert = validate(v);
-            List<Vertex<V>> neighbours = vert.getAdjVert(); // 获取顶点v的邻接表
-            List<Edge<E>> outgoings = new ArrayList<>(); // 存放 出边
-
+            List<Vertex<V>> neighbours = vert.getAdjVert(); // get the adjacency list of vertex v
+            List<Edge<E>> outgoings = new ArrayList<>();
             for (Vertex<V> neighbour : neighbours) {
                 outgoings.add(getEdge(vert, neighbour));
             }
@@ -2162,17 +1732,12 @@ public class AADS {
             if (!isDirected) {
                 return outDegree(v);
             }
-
             InnerVertex<V> vert = validate(v);
-            List<Edge<E>> incomings = new ArrayList<>();
             int cnt = 0;
-
-            // 遍历图中的所有边
             for (Edge<E> edge : edges) {
                 InnerEdge<E> innerEdge = (InnerEdge<E>) edge;
                 Vertex<V>[] endpoints = innerEdge.getEndpoints();
-
-                // 检查有向图的边的终点是否是当前顶点
+                // TODO  verify whether the endpoint of an edge of a directed graph is the current vertex, if so, update the counter
                 if (endpoints[1].equals(vert)) {
                     cnt++;
                 }
@@ -2187,38 +1752,17 @@ public class AADS {
 
             InnerVertex<V> vert = validate(v);
             List<Edge<E>> incomings = new ArrayList<>();
-
-            // 遍历图中的所有边
+            // iterate over every edge
             for (Edge<E> edge : edges) {
                 InnerEdge<E> innerEdge = (InnerEdge<E>) edge;
                 Vertex<V>[] endpoints = innerEdge.getEndpoints();
-
-                // 检查有向图的边的终点是否是当前顶点
+                // verify whether the endpoint of an edge of a directed graph is the current vertex, if so, add it into the edge list
+                // TODO  检查有向图的边的终点是否是当前顶点
                 if (endpoints[1].equals(vert)) {
-                    incomings.add(innerEdge); // 若是，则加入边列表
+                    incomings.add(innerEdge);
                 }
             }
             return incomings;
-//        InnerVertex<V> vert = validate(v);
-//        List<Edge<E>> incomings = new ArrayList<>();
-//
-//        System.out.println("vert:"+vert.getElement());
-//
-//
-//        if (vertices.isEmpty()) throw new IllegalArgumentException("There is no incoming edge");
-//        for (Vertex<V> vertex : vertices()) {
-//            InnerVertex<V> tmp = validate(vertex); // 转为InnerVertex
-//
-//            // 遍历每个顶点的邻接表
-//            for (Vertex<V> neighbour : tmp.getAdjVert()) {
-//                System.out.println("neigh:"+neighbour.getElement());
-//                if (neighbour == vert) {
-//                    System.out.println("1:"+getEdge(neighbour, vert));
-//                    incomings.add(getEdge(neighbour, vert));
-//                }
-//            }
-//        }
-//        return incomings;
         }
 
         public Edge<E> getEdge(Vertex<V> u, Vertex<V> v) throws IllegalArgumentException {
@@ -2228,19 +1772,17 @@ public class AADS {
             for (Edge<E> edge : edges) {
                 InnerEdge<E> innerEdge = (InnerEdge<E>) edge;
                 Vertex<V>[] endpoints = innerEdge.getEndpoints();
-                if (isDirected) {
-                    // 有向图
+                if (isDirected) { // directed graph
                     if (endpoints[0].equals(origin) && endpoints[1].equals(destination)) {
-                        return innerEdge; // 返回找到的边对象
+                        return innerEdge;
                     }
-                } else {
-                    // 无向图
+                } else { // undirected graph
                     if (endpoints[0].equals(origin) && endpoints[1].equals(destination) || endpoints[0].equals(destination) && endpoints[1].equals(origin)) {
-                        return innerEdge; // 返回找到的边对象
+                        return innerEdge;
                     }
                 }
             }
-            return null; // 如果u和v之间没有边，则返回null
+            return null; // if there is no edge between u and v, return null
         }
 
         public Vertex<V>[] endVertices(Edge<E> e) throws IllegalArgumentException {
@@ -2272,8 +1814,7 @@ public class AADS {
 
                 InnerVertex<V> origin = validate(u);
                 InnerVertex<V> destination = validate(v);
-
-                // 信息加入邻接表
+                // add information into the adjacency list
                 origin.getAdjVert().add(destination);
                 if (!isDirected) {
                     destination.getAdjVert().add(origin);
@@ -2302,8 +1843,8 @@ public class AADS {
 
         public void removeVertex(Vertex<V> v) throws IllegalArgumentException {
             InnerVertex<V> vert = validate(v);
-
-            // 从图中删除所有关联边
+            // TODO  从图中删除所有关联边
+            // remove all related edges from the graph
             if (outgoingEdges(vert) != null) {
                 for (Edge<E> e : outgoingEdges(vert)) {
                     if (e != null) {
@@ -2318,8 +1859,7 @@ public class AADS {
                     }
                 }
             }
-
-            // 从顶点列表删除该顶点
+            // remove this vertex from the vertices list
             vertices.remove(vert.getPosition());
             vert.setPosition(null);
         }
@@ -2327,26 +1867,21 @@ public class AADS {
         @SuppressWarnings({"unchecked"})
         public void removeEdge(Edge<E> e) throws IllegalArgumentException {
             InnerEdge<E> edge = validate(e);
-
-            // 获取边的两个端点
+            // get two vertices of the edge
             Vertex<V>[] endpoints = edge.getEndpoints();
             InnerVertex<V> u = validate(endpoints[0]);
             InnerVertex<V> v = validate(endpoints[1]);
-
-            // 从邻接表中移除边
+            // remove the edge from the adjacency list
             u.getAdjVert().remove(v);
             if (!isDirected) {
                 v.getAdjVert().remove(u);
             }
-
-            // 从边列表中移除边
+            // remove the edge from the edge list TODO  从边列表中移除边
             edges.remove(edge.getPosition());
-            edge.setPosition(null); // 使边对象无效
+            edge.setPosition(null); // invalidate edge object
         }
 
-        /**
-         * 返回边e上与顶点v对立的顶点
-         */
+        /* return the vertex opposite to vertex v on edge e */
         public Vertex<V> opposite(Vertex<V> v, Edge<E> e) throws IllegalArgumentException {
             InnerEdge<E> edge = validate(e);
             Vertex<V>[] endpoints = edge.getEndpoints();
@@ -2380,71 +1915,55 @@ public class AADS {
         }
     }
 
+    /**
+     * get the input from the Scanner
+     */
     protected static JSONObject getInput() throws IllegalArgumentException {
         // 1. Getting the input
         Scanner input = new Scanner(System.in);
         StringBuilder sb = new StringBuilder();
         while (input.hasNextLine()) {
-            String nextLine = input.nextLine().trim(); // 省略空格
-
-            // 遇到空行时停止读取
-            if (nextLine.isEmpty()) break;
-//            if (nextLine.isEmpty() || "\n".equals(nextLine)) {
-//                break; // 遇到空行 / "end"时停止读取
-//            }
-            // 将当前遍历行加入StringBuilder
-            sb.append(nextLine);
+            String nextLine = input.nextLine().trim(); // ignore the space
+            if (nextLine.isEmpty()) break; // stop reading while reaching the empty line
+            sb.append(nextLine); // add current line to the StringBuilder
         }
         input.close();
 
         // 2. Parsing Json String to JsonObject / JsonArray
         JSONObject jsonObject = new JSONObject(sb.toString());
-//        System.out.println("JSONObject toString: " + jsonObject.toString() + "\n");
-
         return jsonObject;
     }
 
+    /**
+     * preprocess data
+     */
     protected static PreProcessData preProcessData(JSONObject rawData) throws IllegalArgumentException, IllegalAccessException, ParseException {
-        // 测试(Json parser成功)
-//        System.out.println("Orders: " + jsonObject.optJSONArray("Orders"));
-//        System.out.println("Orders/CollectedId: " + jsonObject.optJSONArray("Orders").opt(0));
-//        System.out.println("y?n: " + ((jsonObject.optJSONArray("Orders").opt(0)) instanceof JSONObject));
-//        System.out.println("Vehicles: ");
-//        JSONObject jo = (JSONObject) (jsonObject.optJSONArray("Vehicles")).opt(0);
-//        System.out.println("jo: " + jo);
-//        System.out.println(jo.opt("StartTime"));
-//        System.out.println(jo.optJSONArray("VehicleCapacity").opt(0));
-
         // 1. Getting 'InstanceName', without considering 'Configuration'.
         String instanceName = (rawData.opt("InstanceName")).toString();
 
-        // 2. 获取 地点 的具体信息
+        // 2. Obtain info about the site(collect site and deliver site)
         JSONObject matrix = rawData.optJSONObject("Matrix");
-        // 获取每个地点的坐标
+        // obtain the locations
         JSONArray matrixData = new JSONArray(String.valueOf(matrix.opt("Locations")));
-        // 存放处理后的所有地点
+        // store the data after processing TODO   存放处理后的所有地点
         List<Site> locationList = new ArrayList<>();
-        // 获取每个地点到其他地点的距离\时间
+        // get the distance and time from each site to other sites   TODO   获取每个地点到其他地点的距离\时间
         JSONArray LocationData = new JSONArray(String.valueOf(matrix.opt("Data")));
-        JSONArray tmpData = new JSONArray(String.valueOf(LocationData.getString(0))); // 表示距离时间的一维数组
+        JSONArray tmpData = new JSONArray(String.valueOf(LocationData.getString(0))); // 1d-array representing distance time
 
         for (int i = 0; i < matrixData.length(); i++) {
-            String[] coordinates = ((String) matrixData.opt(i)).split(","); // 根据逗号分割字符串，获取坐标
-            JSONArray tmp = new JSONArray(String.valueOf(tmpData.getString(i))); // 第i个地点与其他地点的距离、时间
-            Site site = new Site(coordinates, tmp); // 创建Site
+            String[] coordinates = ((String) matrixData.opt(i)).split(","); // split by comma to get the coordinates
+            JSONArray tmp = new JSONArray(String.valueOf(tmpData.getString(i))); // get the distance and time from i-th site
+            Site site = new Site(coordinates, tmp); // create a dto
             locationList.add(site);
         }
-        System.out.println("location List: " + locationList.toString());
-        System.out.println("There are " + locationList.size() + " locations in this input.\n");
+        System.out.println("location List: " + locationList.toString()); // test
+        System.out.println("There are " + locationList.size() + " locations in this input.\n"); // test
 
-//        JSONArray matrixData = new JSONArray(String.valueOf(matrix.opt("Data")));
-//        JSONArray locations = new JSONArray(matrixData.getString(0)); // 获取表示地点的数组
-//        System.out.println("locations: " + locations.toString());
-
-        // 3. 获取 所有车辆 的具体信息
+        // 3. Obtain info about the vehicles
         JSONArray vehicles = rawData.optJSONArray("Vehicles");
-        List<Vehicle> vehicleList = new ArrayList<>(); // 存放所有车辆的信息
-        for (Object o : vehicles.toList()) { // 每个元素是HashMap
+        List<Vehicle> vehicleList = new ArrayList<>();
+        for (Object o : vehicles.toList()) { // each item in the list is a HashMap
             Map<String, Object> v;
             if (o instanceof HashMap) {
                 v = (Map<String, Object>) o;
@@ -2452,13 +1971,13 @@ public class AADS {
                 throw new JSONException("This is not a HashMap object.");
             }
 
-            // 构造车辆DTO
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"); // 定义日期格式，获取startTime
-            // 获取车辆标识码、weight
+            // create a dto about vehicles
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+            // get vehicleId and weight             TODO  车辆标识码
             List<Map<String, Object>> tmp = (ArrayList) v.get("VehicleCapacity");
             Map<String, Object> capacityMap = tmp.get(0);
 
-            // 创建Vehicle DTO
+            // create Vehicle DTO
             Vehicle dto = new Vehicle(Long.parseLong((String) capacityMap.get("CompartmentId")),
                     Integer.parseInt((String) v.get("StartSite")),
                     sdf.parse((String) v.get("StartTime")),
@@ -2466,37 +1985,30 @@ public class AADS {
                     Integer.parseInt((String) v.get("EndSite")),
                     new ArrayList<>(), new ArrayList<>(), new ArrayList<>(),
                     new ArrayList<>(), new ArrayList<>(), Integer.parseInt((String) v.get("StartSite")));
-            vehicleList.add(dto); // 车辆DTO加入列表
+            vehicleList.add(dto);
         }
-        System.out.println("Vehicle list: " + vehicleList.toString());
-        System.out.println("There are " + vehicleList.size() + " vehicles in this input.\n");
+        System.out.println("Vehicle list: " + vehicleList.toString()); // test
+        System.out.println("There are " + vehicleList.size() + " vehicles in this input.\n"); // test
 
-        // 4. 获取 所有订单 的具体信息，构造Customer类
+        // 4. Obtain info about the customers
         JSONArray orders = rawData.optJSONArray("Orders");
-        List<Customer> customerList = new ArrayList<>(); // 存放所有客户
-        if (orders.toList() instanceof ArrayList) { // orders是ArrayList类型
+        List<Customer> customerList = new ArrayList<>();
+        if (orders.toList() instanceof ArrayList) { // the type is ArrayList
             for (Object o : orders.toList()) {
-                Map<String, Object> mapO = (HashMap) o; // o是HashMap类型
+                Map<String, Object> mapO = (HashMap) o; // the type of o is HashMap
 
-                // 构造Customer DTO
-//                Customer customer = new Customer();
-//                customer.setCollectId((String) mapO.get("CollectId"));
-//                customer.setDeliverId((String) mapO.get("DeliverId"));
-
-                // 根据siteId，找到CollectSite、DeliverSite DTO
+                // find CollectSite and DeliverSite DTO according to the siteId
                 Site collectSite = new Site(), deliverSite = new Site();
                 for (Site site : locationList) {
                     if (mapO.get("CollectSiteId").equals(String.valueOf(site.getId()))) {
-//                        customer.setCollectSite(site);
                         collectSite = site;
                     }
                     if (mapO.get("DeliverSiteId").equals(String.valueOf(site.getId()))) {
-//                        customer.setDeliverSite(site);
                         deliverSite = site;
                     }
                 }
 
-                // 处理CollectTime DTO
+                // process CollectTime DTO
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
                 Date earliestCollect = sdf.parse((String) mapO.get("EarliestCollect1"));
                 Date latestCollect = sdf.parse((String) mapO.get("LatestCollect1"));
@@ -2504,40 +2016,27 @@ public class AADS {
                 Time collect = new Time(earliestCollect, latestCollect, diff / (1000.0 * 60 * 60),
                         (String) mapO.get("CollectId"), 0, 0, 0);
 
-                // 处理DeliverTime DTO
+                // process DeliverTime DTO
                 Date earliestDeliver = sdf.parse((String) mapO.get("EarliestDeliver1"));
                 Date latestDeliver = sdf.parse((String) mapO.get("LatestDeliver1"));
                 diff = latestDeliver.getTime() - earliestDeliver.getTime();
                 Time deliver = new Time(earliestDeliver, latestDeliver, diff / (1000.0 * 60 * 60),
                         (String) mapO.get("DeliverId"), 0, 0, 0);
 
-//                // 遍历   TODO 20241125 1733注释⭐
-//                for (int i = 0; i < tmpData.length(); i++) {
-//                    JSONArray tmp = new JSONArray(String.valueOf(tmpData.getString(i))); // 第i个地点与其他地点的距离、时间
-////                    System.out.println("collect ID: " + (Integer.parseInt((String) mapO.get("CollectSiteId"))) + "; i: " + i);
-//                    if ((Integer.parseInt((String) mapO.get("CollectSiteId"))) == i) { // 找到当前遍历的数组
-//                        curData = tmp;
-//                    }
-//                }
-////                System.out.println("curData: " + curData.toString());
-//                // 获取DeliverSiteId对应的距离、时间数据
-//                String str = curData.getString(Integer.parseInt((String) mapO.get("DeliverSiteId")));
-//                JSONArray ja = new JSONArray(str);
-
-                // 创建Customer DTO
+                // create Customer DTO
                 Customer customer = new Customer(
                         (String) mapO.get("CollectId"), (String) mapO.get("DeliverId"),
-                        collectSite, deliverSite, collect, deliver, // 取送货的地点、时间
-                        ((Integer) mapO.get("CollectTimeInMinutes")).longValue(), // 送货耗时
-                        ((Integer) mapO.get("DeliverTimeInMinutes")).longValue(), // 送货耗时
+                        collectSite, deliverSite, collect, deliver, // the site and time of collect and deliver  TODO 取送货的地点、时间
+                        ((Integer) mapO.get("CollectTimeInMinutes")).longValue(), // time in collect
+                        ((Integer) mapO.get("DeliverTimeInMinutes")).longValue(), // time in deliver
                         (Integer) mapO.get("Weight"), // weight
-                        false, // 初始未取货
-                        -1); // 分配到的路线的id
-                customerList.add(customer); // 加入列表
+                        false, // default value, no collect at the beginning
+                        -1); // assigned route id  TODO  分配到的路线的id
+                customerList.add(customer);
             }
         }
-        System.out.println("There are " + customerList.size() + " customers in this input.");
-        System.out.println("Contents in the customerList: \n" + customerList.toString());
+        System.out.println("There are " + customerList.size() + " customers in this input."); // test
+        System.out.println("Contents in the customerList: \n" + customerList.toString()); // test
 
         // TODO 放入report，这是测试数据的一个方法
         // 查看CollectTimeWindow、DeliverTimeWindow的时间数据
@@ -2554,87 +2053,10 @@ public class AADS {
 //        System.out.println("Set size: " + s.size());
 //        System.out.println("List size: " + l.size());
 
-        // 5. 查看orders的取送货地点的情况
-        // TODO  20241125 20:30注释测试customer图的代码
-//        AdjacencyListGraph<SitePair, Integer> ordersGraph = new AdjacencyListGraph(true);
-//
-//        // insert vertex
-//        List<Vertex<SitePair>> verticesList = new ArrayList<>();
-//        for (Customer c : customerList) {
-//            // 处理取货地点
-//            if (ordersGraph.numVertices() == 0) {
-//                // 初始时，图为空
-//                SitePair sitePair = new SitePair(c.getCollectSite().getId(), c.getCollectSite());
-//                Vertex<SitePair> v = ordersGraph.insertVertex(sitePair);
-//                verticesList.add(v);
-//            } else {
-//                // 判断顶点是否在图中
-//                boolean containFlag1 = false; // 判断是否已在图中
-//                for (Vertex<SitePair> vert : ordersGraph.vertices()) {
-//                    if (vert.getElement().getId() == c.getCollectSite().getId()) { // 根据id判断是否是同个地点
-//                        containFlag1 = true;
-//                    }
-//                }
-//                if (!containFlag1) {
-//                    SitePair test = new SitePair(c.getCollectSite().getId(), c.getCollectSite());
-//                    Vertex<SitePair> v = ordersGraph.insertVertex(test);
-//                    verticesList.add(v);
-//                }
-//            }
-//
-//            // 处理送货地点
-//            boolean containFlag2 = false; // 判断是否已在图中
-//            for (Vertex<SitePair> vert : ordersGraph.vertices()) {
-//                if (vert.getElement().getId() == c.getDeliverSite().getId()) {
-//                    containFlag2 = true;
-//                }
-//            }
-//            if (!containFlag2) {
-//                SitePair test = new SitePair(c.getDeliverSite().getId(), c.getDeliverSite());
-//                Vertex<SitePair> v = ordersGraph.insertVertex(test);
-//                verticesList.add(v);
-//            }
-//        }
-//
-////        // 测试已加入列表的所有顶点      TODO   可以考虑放入report作为分析
-////        System.out.println("Vertices List in the graph: ");
-////        for (Vertex<Test> t : verticesList) {
-////            System.out.println("vertex: " + t.getElement().toString());
-////        }
-//
-//        // insert edges
-//        for (Customer c : customerList) {
-//            // 已知地点从1-100编号，则verticesList中顶点根据地点序号排序
-//            Vertex<SitePair> collectV = null, deliverV = null;
-//            for (Vertex<SitePair> v : verticesList) {
-//                if (c.getCollectSite().getId() == v.getElement().getSite().getId()) {
-//                    collectV = v; // 取货地
-//                }
-//                if (c.getDeliverSite().getId() == v.getElement().getSite().getId()) {
-//                    deliverV = v; // 送货地
-//                }
-//            }
-//            if (collectV != null && deliverV != null) {
-//                // 边的权重，应当等于两个site间的距离  TODO  19:33开始处理
-////                ordersGraph.insertEdge(collectV, deliverV, c.getDistance());
-//            }
-//        }
-//
-//        // 查看图的顶点\边信息
-//        System.out.println("After constructing the graph: \n" + ordersGraph.toString());
-//        System.out.println("Edges in the graph: ");
-//        // 获取元组，包括边、边的两个顶点
-//        for (Tuple<Edge<Integer>, List<Vertex<SitePair>>> tuple : ordersGraph.edges()) {
-//            Edge<Integer> edge = tuple.getFirst();
-//            List<Vertex<SitePair>> endVertices = tuple.getSecond();
-//            System.out.println("Vertices(Sites): { " + endVertices.get(0).getElement() + ", " +
-//                    endVertices.get(1).getElement() + " }, Edge(Distance): " + edge.getElement());
-//        }
+        // 6. create Route DTO
+        AdjacencyListGraph<SiteGraph, Integer> graph = new AdjacencyListGraph(true); // graph containing all locations and routes TODO 包含所有地点及路程的图
 
-        // 6. 构造Route类
-        AdjacencyListGraph<SiteGraph, Integer> graph = new AdjacencyListGraph(true); // 包含所有地点及路程的图
-
-        // 遍历locationList,创建所有地点(vertex)
+        // traverse 'locationList' and create all locations (vertex) TODO 遍历locationList,创建所有地点(vertex)
         List<Vertex<SiteGraph>> allVerticesList = new ArrayList<>();
         for (Site site : locationList) {
             SiteGraph siteGraph = new SiteGraph(site.getCoordinates());
@@ -2642,32 +2064,26 @@ public class AADS {
             allVerticesList.add(v);
         }
 
-//        // 测试已加入列表的所有顶点      TODO   可以考虑放入report作为分析
-//        System.out.println("Vertices List in the graph: ");
-//        for (Vertex<Test> t : verticesList) {
-//            System.out.println("vertex: " + t.getElement().toString());
-//        }
-
-        // 遍历所有顶点,创建边(edge)
+        // traverse every vertex and create edges TODO 遍历所有顶点,创建边(edge)
         for (Site v : locationList) {
             JSONArray disAndTime = v.getDisAndTime();
             for (int i = 0; i < disAndTime.length(); i++) {
-//                if (disAndTime.opt(i)!=null){
                 if (i != v.getId()) {
-                    // 只要不为null,则表示是到其他地点的距离\时间,则添加边
+                    // as long as it is not null, it means the distance/time to other places, then add an edge
+                    // TODO 只要不为null,则表示是到其他地点的距离\时间,则添加边
                     JSONArray arr = new JSONArray((String) disAndTime.opt(i));
-                    // 获取有向弧的狐头
+                    // get the head of a directed arc TODO  获取有向弧的狐头
                     Vertex<SiteGraph> startV = allVerticesList.get((int) v.getId());
-                    // 获取有向弧的狐尾
+                    // get the tail of a directed arc TODO  获取有向弧的狐尾
                     Vertex<SiteGraph> endV = allVerticesList.get(i);
-                    // arr.opt(0)距离,arr.opt(1)时间
+                    // arr.opt(0): distance; arr.opt(1): time
 //                    graph.insertEdge(v, endV, (Integer) arr.opt(0));
                     graph.insertEdge(startV, endV, (Integer) arr.opt(1));
                 }
             }
         }
 
-        // 查看图的顶点\边信息 TODO  可放入report
+        // 查看图的顶点\边信息 // test TODO  放入report
 //        System.out.println("After constructing the graph 'graph': \n" + graph);
 //        System.out.println("Edges in the graph 'graph': ");
 //        // 获取元组，包括边、边的两个顶点
@@ -2678,9 +2094,9 @@ public class AADS {
 //                    endVertices.get(1).getElement() + " }, Edge(Distance): " + edge.getElement());
 //        }
 
-        // 7. 赋值全局变量、参数
+        // 7. assign global variables and parameters
         return new PreProcessData(instanceName, locationList, vehicleList, customerList,
-                graph, new Random(20717331L));
+                graph, new Random(20717331L)); // input the random with seed
     }
 
     /**
@@ -2827,70 +2243,6 @@ public class AADS {
                         ", customerId=" + customerId +
                         '}';
             }
-        }
-    }
-
-    /**
-     * Time node list DTO  TODO 记得检查是否使用
-     */
-    protected static class TimeList {
-        private long id;
-        private List<Time> driveTimeList;
-        private List<Time> otherTimeList;
-        private List<Time> breakTimeList;
-
-        private static int next = 0; // 自增id
-
-        public TimeList() {
-            this.id = 0;
-            this.driveTimeList = new ArrayList<>();
-            this.otherTimeList = new ArrayList<>();
-            this.breakTimeList = new ArrayList<>();
-        }
-
-        public TimeList(List<Time> driveTimeList, List<Time> otherTimeList, List<Time> breakTimeList) {
-            this.id = 0;
-            this.driveTimeList = driveTimeList;
-            this.otherTimeList = otherTimeList;
-            this.breakTimeList = breakTimeList;
-        }
-
-        public long getId() {
-            return id;
-        }
-
-        public void setDriveTimeList(List<Time> driveTimeList) {
-            this.driveTimeList = driveTimeList;
-        }
-
-        public List<Time> getDriveTimeList() {
-            return driveTimeList;
-        }
-
-        public void setOtherTimeList(List<Time> otherTimeList) {
-            this.otherTimeList = otherTimeList;
-        }
-
-        public List<Time> getOtherTimeList() {
-            return otherTimeList;
-        }
-
-        public void setBreakTimeList(List<Time> breakTimeList) {
-            this.breakTimeList = breakTimeList;
-        }
-
-        public List<Time> getBreakTimeList() {
-            return breakTimeList;
-        }
-
-        @Override
-        public String toString() {
-            return "CustomerDto{" +
-                    "id=" + id +
-                    ", driveTimeList=" + driveTimeList.toString() +
-                    ", otherTimeList=" + otherTimeList.toString() +
-                    ", breakTimeList=" + breakTimeList.toString() +
-                    "}\n";
         }
     }
 
@@ -3122,7 +2474,7 @@ public class AADS {
     }
 
     /**
-     * SiteGraph DTO
+     * SiteGraph (for test) DTO
      */
     protected static class SiteGraph {
         private long id; // （取货/送货）地点Id，自增实现
@@ -3163,65 +2515,23 @@ public class AADS {
     }
 
     /**
-     * site pair for constructing the graph DTO
-     */
-    protected static class SitePair {
-        private long id; // 地点Id（取货/送货）
-        private Site site;
-
-        public SitePair() {
-            this.id = 0;
-            this.site = new Site();
-        }
-
-        public SitePair(long id, Site site) {
-            this.id = id;
-            this.site = site;
-        }
-
-        public long getId() {
-            return id;
-        }
-
-        public void setId(long id) {
-            this.id = id; // 将id设置为地点id
-        }
-
-        public Site getSite() {
-            return site;
-        }
-
-        public void setSite(Site site) {
-            this.site = site;
-        }
-
-        @Override
-        public String toString() {
-            return "SitePairDto{" +
-                    "id=" + id +
-                    ", site=" + site.toString() +
-                    '}';
-        }
-    }
-
-    /**
      * Customer DTO
      */
     protected static class Customer {
         private long id;
-        private String collectId; // 取货id
-        private String deliverId; // 送货id
-        private Site collectSite; // 取货地点Dto
-        private Site deliverSite; // 送货地点Dto
-        private Time collectTimeWindow; // 取货时间窗口
-        private Time deliverTimeWindow; // 送货时间窗口
-        private long collectTimeinMinutes; // 取货耗时
-        private long deliverTimeinMinutes; // 送货耗时
-        private int weight; // 货物重量
-        private boolean isDelivered;//是否已经送货
-        private long routeId; // 已被分配的路线id
+        private String collectId; // collect id
+        private String deliverId; // deliver id
+        private Site collectSite; // collect site Dto
+        private Site deliverSite; // deliver site Dto
+        private Time collectTimeWindow; // collect time window
+        private Time deliverTimeWindow; // deliver time window
+        private long collectTimeinMinutes; // collect time
+        private long deliverTimeinMinutes; // deliver time
+        private int weight; // weight of customers
+        private boolean isDelivered; // whether is delivered
+        private long routeId; // allocated route id
 
-        private static int next = 0; // 自增id
+        private static int next = 0; // auto-increment id
 
         public Customer() {
             this.id = 0;
@@ -3537,32 +2847,32 @@ public class AADS {
             // 1. 驾驶4.5h，至少休息45min（分两段）
             if (driveTime >= 4.5 * 60 * 60 * 1000) {
 //                // TODO  尝试枚举判断30min/45min，选用用时更少的休息规则
-//                if (breakTime < 45 * 60 * 1000) { // 休息45min
-                breakTime += 15 * 60 * 1000; // take a 15-minute-break
-                createTimeNode(getVehicle(),
-                        startTime,
-                        15 * 60 * 1000,
-                        "break",
-                        0,
-                        customer.getId(),
-                        "temp"); // 创建时间节点
-                startTime += 15 * 60 * 1000; // for update
-                breakTime += 30 * 60 * 1000; // then, take a 30-minute-break
-                createTimeNode(getVehicle(),
-                        startTime,
-                        30 * 60 * 1000,
-                        "break",
-                        0,
-                        customer.getId(),
-                        "temp"); // 创建时间节点
-                startTime += 30 * 60 * 1000; // for update
+                if (breakTime < 45 * 60 * 1000) { // 休息45min
+                    breakTime += 15 * 60 * 1000; // take a 15-minute-break
+                    createTimeNode(getVehicle(),
+                            startTime,
+                            15 * 60 * 1000,
+                            "break",
+                            0,
+                            customer.getId(),
+                            "temp"); // 创建时间节点
+                    startTime += 15 * 60 * 1000; // for update
+                    breakTime += 30 * 60 * 1000; // then, take a 30-minute-break
+                    createTimeNode(getVehicle(),
+                            startTime,
+                            30 * 60 * 1000,
+                            "break",
+                            0,
+                            customer.getId(),
+                            "temp"); // 创建时间节点
+                    startTime += 30 * 60 * 1000; // for update
 //                    driveTime = 0; // 重置驾驶时间
-                flag = true;
-//                }
+                    flag = true;
+                }
             }
             // 2. 总工作时间6~9h，应休息30min，这里休息45min重置drive Time
             if (overallDuration >= 6 * 60 * 60 * 1000 && overallDuration < 9 * 60 * 60 * 1000) {
-//                if (breakTime < 30 * 60 * 1000) {
+//                if (breakTime < 45 * 60 * 1000) {
 //                    breakTime += 30 * 60 * 1000;
                 breakTime += 45 * 60 * 1000;
                 createTimeNode(getVehicle(),
@@ -3580,23 +2890,21 @@ public class AADS {
             }
             // 3. 总工作时间超过9h，应休息45min
             if (overallDuration >= 9 * 60 * 60 * 1000) {
-//                if (breakTime < 45 * 60 * 1000) {
-                breakTime += 45 * 60 * 1000;
-                createTimeNode(getVehicle(),
-                        startTime,
-                        45 * 60 * 1000,
-                        "break",
-                        0,
-                        customer.getId(),
-                        "temp"); // 创建时间节点
-                startTime += 45 * 60 * 1000;
-                flag = true;
-//                }
+                if (breakTime < 45 * 60 * 1000) {
+                    breakTime += 45 * 60 * 1000;
+                    createTimeNode(getVehicle(),
+                            startTime,
+                            45 * 60 * 1000,
+                            "break",
+                            0,
+                            customer.getId(),
+                            "temp"); // 创建时间节点
+                    startTime += 45 * 60 * 1000;
+                    flag = true;
+                }
             }
             // 4. 重置drive time
-            if (flag) {
-                driveTime = 0;
-            }
+            if (flag) driveTime = 0;
             // 5. 返回更新后的时间数据
             res.add(breakTime); // first item
             res.add(driveTime); // second item
@@ -4407,6 +3715,7 @@ public class AADS {
                 System.out.println("DURATION: " + date + "; " + duration);
                 System.out.println("发车：" + new Date(vehicleStartTime) + "; " + vehicleStartTime);
                 System.out.println("差值： " + (duration - vehicleStartTime));
+                System.out.println("当前：" + getVehicle().getId());
 
 //                // 获取车辆发车时间
 //                long vehicleStartTime = (getVehicle().getStartTime()).getTime();
@@ -4463,6 +3772,10 @@ public class AADS {
                                 0,
                                 customer.getId(),
                                 "temp"); // 创建时间节点
+
+                        System.out.println("这是测试：" + new Date(tmp) + "; " + tmp);
+                        System.out.println("这是测试：" + new Date(curTime) + "; " + curTime);
+
                         List<Long> breakResult = needBreaks(curTime,
 //                                customer.getCollectTimeinMinutes() * 60 * 1000,
                                 curTime - tmp,
@@ -4999,7 +4312,7 @@ public class AADS {
                 // 1. 获取全局data中需要使用的数据
 //                long curTime = data.getCurTime(); // 送完货的耗时
                 long curTime = overallDuration;
-                System.out.println("返程！： " + overallDuration + " ms; " + new Date(overallDuration));
+//                System.out.println("返程！： " + overallDuration + " ms; " + new Date(overallDuration));
                 Site deliverSite = data.getDeliverSite();
 //                System.out.println("return back time：" + data.getCurTime());
 
@@ -5351,7 +4664,6 @@ public class AADS {
         private List<Site> locationList;
         private List<Vehicle> vehicleList;
         private List<Customer> customerList;
-        //        AdjacencyListGraph<SitePair, Integer> ordersGraph; // 查看orders的取送货地点的信息
         private AdjacencyListGraph<SiteGraph, Integer> graph; // 所有地点的图
 
         /* 分配请求customer的数据 */
@@ -5369,7 +4681,6 @@ public class AADS {
             this.locationList = new ArrayList<>();
             this.vehicleList = new ArrayList<>();
             this.customerList = new ArrayList<>();
-//            this.ordersGraph = new AdjacencyListGraph<>(true);
             this.graph = new AdjacencyListGraph<>(true);
 
             this.deliverSite = new Site();
@@ -5389,7 +4700,6 @@ public class AADS {
             this.locationList = locationList;
             this.vehicleList = vehicleList;
             this.customerList = customerList;
-//            this.ordersGraph = ordersGraph;
             this.graph = graph;
             this.random = random;
         }
@@ -5425,14 +4735,6 @@ public class AADS {
         public List<Customer> getCustomerList() {
             return customerList;
         }
-
-//        public void setOrdersGraph(AdjacencyListGraph<SitePair, Integer> ordersGraph) {
-//            this.ordersGraph = ordersGraph;
-//        }
-//
-//        public AdjacencyListGraph<SitePair, Integer> getOrdersGraph() {
-//            return ordersGraph;
-//        }
 
         public void setGraph(AdjacencyListGraph<SiteGraph, Integer> graph) {
             this.graph = graph;
@@ -5857,7 +5159,7 @@ public class AADS {
                                 // 成功分配
                                 flag = true;
 
-                                sumCost += cost / (1000 * 60.0); // test
+                                sumCost += cost; // test
                                 sumDuration += bestRoute.getOverallDuration(); // test
                             }
                         } else {
@@ -5896,9 +5198,8 @@ public class AADS {
                 }
             }
 
-            System.out.println("Final cost: " + sumCost + " min"); // test
+            System.out.println("Final cost: " + (sumCost / (1000.0 * 60 * 60)) + " min"); // test
             System.out.println("Final duration: " + sumDuration + " min"); // test
-
 //            // 执行每条路线的返程  TODO  1206 0132
 //            System.out.println("SuC: " + sucCustomers.keySet());
 //            System.out.println("SS: "+sucCustomers.get(45).getRoute().getCustomers().toString());
@@ -5958,19 +5259,11 @@ public class AADS {
 //            if (randSize == 0 && len == 1) { // 若只有一辆车，则设置为1
 //                randSize = 1;
 //            }
-//            else if (len == 2) { // 两辆车，尝试设置为2  TODO  1202 0000加上的
-//                randSize = 2;
-//            }
-//            else if (data.getVehicleList().size()>1){ // 若有多辆车，让随机数设置为车辆总数
-//                randSize=data.getVehicleList().size();
-//            }
-//            System.out.println("random.nextInt(len): " + randSize);
 
 //            for (int j = 0; j < randSize; j++) { // TODO  1204 1346修改
             for (int j = 0; j < 1; j++) {
                 // 1)将j作为获取车辆的下标(每次先获取第一辆车作为要创建的新路线的用车)
                 Vehicle vehicle = data.getVehicleList().get(j);
-                System.out.println("vehicle: " + vehicle);
 
                 // 2)创建一条新路线(请求(Customer)列表为空)，分配车辆
                 Route newRoute = new Route(vehicle,
@@ -5990,8 +5283,6 @@ public class AADS {
         double sum = 0.0;
 
         for (Entry<Integer, SucCustomerDto> entry : sucCustomers.entrySet()) {
-//            System.out.println("routeIdx: " + entry.getKey());
-
             // 1. 从dto获取数据
             SucCustomerDto dto = entry.getValue();
             Route route = dto.getRoute();
@@ -6010,10 +5301,6 @@ public class AADS {
             long vehicleStartTime = dto.getRoute().getVehicle().getStartTime().getTime(); // 获取路线的发车时间
 //            System.out.println("11: " + new Date(overallDuration));
 //            System.out.println("22: " + dto.getRoute().getVehicle().getStartTime());
-//                    System.out.println("请求customer：" + customer);
-//            System.out.println("总驾驶时间：" + dailyDriveTime);
-//                System.out.println("最后一个请求：" + assignedCustomer.get(assignedCustomer.size() - 1));
-//                if (!customerList.isEmpty()) { // 有订单,则尝试返程
 
             // 2. 若 有订单且未处理过返回仓库，则尝试返程
             List<Customer> customerList = route.getCustomers();
@@ -6024,7 +5311,6 @@ public class AADS {
                             dailyDriveTime,
                             overallDuration + vehicleStartTime); // input daily overall drive time
                 } catch (RuntimeException e) {
-                    System.out.println("错误？");
                     continue;
                 }
                 if (canReturn) {
@@ -6032,32 +5318,19 @@ public class AADS {
                     List<Route> rawRoutes = individual.getRoutes();
                     rawRoutes.set(routeIdx, route);
                     individual.setRoutes(rawRoutes);
-//                    // 2)更新fitness  TODO   需要在其他地方设置总fitness
-//                    double newFitness = 0.0;
-//                    for (Route r : individual.getRoutes()) {
-//                        newFitness += r.getOverallDuration();
-//                    }
-//                    individual.setFitness(newFitness);
 
                     // 2)更新individual
                     individuals.set(individualIdx, individual);
 
-                    //                    // TODO test
-//                    if (route.getVehicle().getId()==8423){
-//                        System.out.println("car: "+vehicleStartTime+" ; "+new Date(vehicleStartTime));
-//                        System.out.println("rr: "+ route.getOverallDuration()+" ; "+new Date(route.getOverallDuration()));
-//                    }
-
                     // 3)计算每个路线的overall duration time
-                    System.out.println("CAR: " + vehicleStartTime + " ; " + new Date(vehicleStartTime));
-                    System.out.println("ROUTE: " + route.getOverallDuration() + " ; " + new Date(route.getOverallDuration()));
+//                    System.out.println("CAR: " + vehicleStartTime + " ; " + new Date(vehicleStartTime));
+//                    System.out.println("ROUTE: " + route.getOverallDuration() + " ; " + new Date(route.getOverallDuration()));
                     sum += (route.getOverallDuration() - vehicleStartTime);
 
                     // 4)更新dto是否处理返回仓库的标记
                     dto.setReturned(true);
                 }
             }
-            System.out.println("总的：" + sum);
         }
         // 3. 更新fitness
         individuals.get(0).setFitness(sum / (1000.0 * 60 * 60)); // units: h
@@ -6068,27 +5341,27 @@ public class AADS {
     protected static PreProcessData tmpData = new PreProcessData();
 
     /**
-     * Initialize the population
+     * Initialize the population with the Greedy Algorithm
      */
-    protected static Population initializePopulation(PreProcessData data, int nPop) {
+    protected static Population initializePopulationWithGreedy(PreProcessData data, int nPop) {
         // 1. initialization
         Population population = new Population(new ArrayList<>(), nPop, 0.0,
                 new ArrayList<>(), new ArrayList<>());
-        List<Individual> individuals = new ArrayList<>(nPop); // 种群的个体数最多200个
-        Random random = data.getRandom(); // 获取随机数种子为studentID的随机数生成类
-        int len = data.getVehicleList().size(); // 车辆数
+        List<Individual> individuals = new ArrayList<>(nPop); // maximum number of individuals are 200 TODO 种群的个体数最多200个
+        Random random = data.getRandom(); // use studentID as the seed for the random number generator TODO 获取随机数种子为studentID的随机数生成类
+        int len = data.getVehicleList().size(); // the number of vehicles
 
         // 2. generate nPop number of individuals
-        if (len >= data.getCustomerList().size() && len >= 50) { // 大数据量，按照请求customer为单位
+        if (len >= data.getCustomerList().size() && len >= 50) { // large dataset, request-based TODO 大数据量，按照请求customer为单位
             individuals = initialIndividualsByLargeData(individuals, nPop, len, random, data);
-        } else { // 小数据量，按照取货送货先后进行
+        } else { // small dataset, collect-deliver-order-based TODO 小数据量，按照取货送货先后进行
             individuals = initialIndividualsBySmallData(individuals, nPop, len, random, data);
         }
-        System.out.println("initial individuals: " + individuals);
+//        System.out.println("initial individuals: " + individuals);
 
         // 3. using random number to determine whether to collect the goods first and then deliver them in batches,
-        //    or in units of orders
-        Map<Integer, SucCustomerDto> sucCustomers = new HashMap<>(); // 存放能成功添加的元素,key=routeId,value=DTO
+        //    or in units of orders  TODO  用 随机数 确定是先取货后送货，还是以订单为单位
+        Map<Integer, SucCustomerDto> sucCustomers = new HashMap<>(); // store successful added customers, key=routeId, value=DTO
         boolean method = random.nextBoolean();
 
 //        // 3. 先获取70%的customer，进行分配（大数据量测试集）
@@ -6104,15 +5377,17 @@ public class AADS {
 ////        System.out.println("initial size: "+initialCustomerList.size()+"\n content: "+initialCustomerList.toString());
 ////        System.out.println("extra size: "+extraCustomerList.size()+"\n content: "+extraCustomerList.toString());
 
-        // 4. 对于每个要插入的请求，检查当前（部分）解决方案中所有现有路线的所有可行插入点
+        // 4. for each customer to be added, check all feasible insertion points for all existing routes in the current solution
+        //    consider the priority, capacity and time constraints
+        // TODO  对于每个要插入的请求，检查当前（部分）解决方案中所有现有路线的所有可行插入点
         //      测试路线中取货和送货节点的所有可能插入位置，同时考虑优先级、容量和时间约束
         Tuple<List<Individual>, Map<Integer, SucCustomerDto>> res;
-        if (len >= data.getCustomerList().size() && len >= 50) { // 针对大数据量
-            // 1)分配请求
+        if (len >= data.getCustomerList().size() && len >= 50) { // large dataset
+            // 1)assign customers
             res = assignCustomers(individuals, data, true, sucCustomers, data.getCustomerList());
             if (res != null) {
                 individuals = res.getFirst(); // individual list
-                sucCustomers = res.getSecond(); // successful customers TODO 1206 0853添加
+                sucCustomers = res.getSecond(); // successful customers
             }
 
 //            // 2)更新种群的总fitness
@@ -6126,7 +5401,7 @@ public class AADS {
 //            population.setIndividuals(individuals);
 //            System.out.println("Overall fitness is :  " + population.getOverallFitness() + " hours");
 //            return population;
-        } else { // 针对小数据量
+        } else { // small dataset
             res = assignCustomers(individuals, data, method, sucCustomers, data.getCustomerList());
             if (res != null) {
                 individuals = res.getFirst(); // individual list
@@ -6137,57 +5412,69 @@ public class AADS {
 //        System.out.println("分配后获得的sucCustomers: " + sucCustomers);
 //        System.out.println("unassigned: " + unassignedCustomer);
 
-        // 5. 处理unassignedCustomer，把unassigned 的车辆分配给其他车，如果只有一辆车，则新增一辆
+        // 5. process 'unassignedCustomer' and assign the unassigned customers to other routes
+        //    if there is only one vehicle, add a new one
+        // TODO  处理unassignedCustomer，把unassigned 的车辆分配给其他车，如果只有一辆车，则新增一辆
         if (!unassignedCustomer.isEmpty()) {
-            List<Customer> rewritableList = new CopyOnWriteArrayList<>(); // 用于重新分配成功分配的请求
-            List<Integer> routeIdxs = new ArrayList<>(); // 存放要被移除的routeIdx
+            List<Customer> rewritableList = new CopyOnWriteArrayList<>(); // store customers to be reassigned later
+            // TODO  用于重新分配成功分配的请求
+            //       [写入report] ArrayList 的线程安全变体，其中所有可变操作（添加、设置等）都是通过复制底层数组来实现的
+            List<Integer> routeIdxs = new ArrayList<>(); // store the index of routes that will be removed
+            // TODO  存放要被移除的routeIdx
 
-            // 1)删除未成功分配的请求（取货/送货）对应的请求（送货/取货）
+            // 1)delete the customer (delivery/pickup) corresponding to the request (pickup/delivery) that was not successfully assigned
+            // TODO  删除未成功分配的请求（取货/送货）对应的请求（送货/取货）
             for (Customer unassigned : unassignedCustomer) {
-                if (!sucCustomers.isEmpty()) { // 有请求被成功分配
-                    System.out.println("s0: " + assignedCustomer.size() + "; " + assignedCustomer);
-                    System.out.println("s1: " + unassignedCustomer.size() + "; " + unassignedCustomer);
-                    System.out.println("s2: " + sucCustomers.size() + "; " + sucCustomers + "\n");
+                if (!sucCustomers.isEmpty()) { // there is a customer allocated TODO  有请求被成功分配
+                    System.out.println("assignedCustomer: " + assignedCustomer.size() + "; " + assignedCustomer);
+                    System.out.println("unassignedCustomer: " + unassignedCustomer.size() + "; " + unassignedCustomer);
+                    System.out.println("sucCustomers: " + sucCustomers.size() + "; " + sucCustomers + "\n");
 
+                    // Only the last customer would be added into the 'sucCustomers'
+                    // find the collect/deliver jobs corresponding to current traverse customer from the 'sucCustomers',
+                    // then remove those collect/deliver jobs that had been added
                     // TODO  目前只有最后一个顶点加入sucCustomers。尝试添加全局列表，把成功的加入，然后需要的话在下面代码中从列表中移除它
-                    // 从sucCustomers找到该customer对应的取货/送货任务，然后移除该已经加入的取货/送货任务
+                    //       从sucCustomers找到该customer对应的取货/送货任务，然后移除该已经加入的取货/送货任务
                     for (Entry<Long, List<Customer>> entry : assignedCustomer.entrySet()) {
                         long routeIdx = entry.getKey(); // obtain the index of each route
-                        System.out.println("routeIdx: " + routeIdx);
 
-                        // 遍历该route的所有已保存在列表中的请求
+                        // traverse the customer list to find all customers stored in the list
+                        // TODO  遍历该route的所有已保存在列表中的请求
                         List<Customer> list = entry.getValue();
-//                        System.out.println("list: "+list);
                         rewritableList = new CopyOnWriteArrayList<>(list);
-//                        System.out.println("rewritableList: "+rewritableList);
                         for (Customer assigned : rewritableList) {
                             if (assigned.getId() == unassigned.getId()) {
-                                // 获取要删除的请求customer在assigned中的下标
+                                // get the subscript of the requested customer to be removed in the 'assigned'
+                                // TODO  获取要删除的请求customer在assigned中的下标
                                 int removedIdx = rewritableList.indexOf(assigned);
 //                                System.out.println("removedCustomerIdx: " + removedIdx);
 
-                                // 从assignedCustomer移除assigned
+                                // remove assigned from the assignedCustomer
                                 rewritableList.remove(assigned);
-                                System.out.println("after remove: " + rewritableList.size() + "; " + rewritableList);
+//                                System.out.println("after remove: " + rewritableList.size() + "; " + rewritableList);
 
+                                // if it will remove the last customer, the last one after removing will become the DTO
+                                // replacing the DTO of the current route in the 'sucCustomers' list
                                 // TODO  若删除的是最后一个请求，则将assigned经过删除元素后的最后一个，更新成sucCustomers列表中当前路线的DTO
-                                SucCustomerDto dto = sucCustomers.get((int) routeIdx); // 更改成routeId
-                                // 若存在DTO，开始删除assigned
+                                SucCustomerDto dto = sucCustomers.get((int) routeIdx);
+                                // if the DTO is not null, keep going
                                 if (dto != null) {
-                                    System.out.println("删除原请求列表assigned前的DTO: " + dto);
-                                    // 1.获取SucCustomerDto中最新的的customer（获取remove操作后最新的最后一个job）
+//                                    System.out.println("removed DTO: " + dto);
+                                    // 1. get the latest customer in 'SucCustomerDto'
+                                    //    [get the latest job after removing]
+                                    // TODO  获取SucCustomerDto中最新的的customer（获取remove操作后最新的最后一个job）
                                     Customer newLastCus = rewritableList.get(rewritableList.size() - 1);
 
-                                    // 2.更新SucCustomerDto中最新的的路线
+                                    // 2. assign the updated route
+                                    // TODO  更新SucCustomerDto中最新的的路线
                                     Route newRoute = dto.getRoute();
-                                    System.out.println("删除1newRoute: " + newRoute);
+//                                    System.out.println("删除1newRoute: " + newRoute);
                                     List<Customer> customers = newRoute.getCustomers();
-//                                    newRoute.getCustomers().remove(assigned);
-                                    // 2-1.将对应的已分配的请求删除
+                                    // 2-1.remove the corresponding assigned customer TODO  将对应的已分配的请求删除
                                     customers.remove(assigned);
-                                    // 2-2.把该请求列表更新回到route中
+                                    // 2-2.update the customer list back to the route TODO  把该请求列表更新回到route中
                                     newRoute.setCustomers(customers);
-                                    // 2-3.删除newRoute中与已删除请求相关的Time
+                                    // 2-3.remove every time node related to removed customer TODO 删除newRoute中与已删除请求相关的Time
                                     List<Time> driveList = newRoute.getVehicle().getDriveTimeList();
                                     List<Time> breakList = newRoute.getVehicle().getBreakTimeList();
                                     List<Time> otherList = newRoute.getVehicle().getOtherTimeList();
@@ -6203,54 +5490,54 @@ public class AADS {
                                     newRoute.getVehicle().setOtherTimeList(otherList);
                                     newRoute.getVehicle().setDelayTimeList(delayList);
                                     newRoute.getVehicle().setWaitTimeList(waitList);
-                                    System.out.println("删除2newRoute: " + newRoute);
+//                                    System.out.println("删除2newRoute: " + newRoute);
 
-                                    // 3.获取SucCustomerDto中最新的的individual
+                                    // 3.get the latest individual in 'SucCustomerDto'
                                     Individual individual = dto.getIndividual();
-                                    System.out.println("删除所在个体： " + individual.toString());
-                                    // 3-1.更新该个体的路线
+//                                    System.out.println("删除所在个体： " + individual.toString());
+                                    // 3-1.update the route of this individual TODO  更新该个体的路线
                                     List<Route> routes = individual.getRoutes();
-                                    System.out.println("删除所在路线： " + routes.toString());
+//                                    System.out.println("删除所在路线： " + routes.toString());
                                     for (Route route : routes) {
-                                        if (route.getId() == routeIdx) { // 找到当前处理的路线，更新newRoute
+                                        if (route.getId() == routeIdx) { // find the currently processed route, set the 'newRoute' TODO 找到当前处理的route，并更新回routes
                                             routes.set((int) routeIdx, newRoute);
                                         }
                                     }
                                     individual.setRoutes(routes);
-                                    System.out.println("删除所在路线2： " + routes.toString());
+//                                    System.out.println("删除所在路线2： " + routes.toString());
 
-                                    // 4. 构建新DTO，替换旧DTO
+                                    // 4.construct a new dto
                                     SucCustomerDto newDto = new SucCustomerDto(newLastCus, individual,
                                             newRoute, dto.getIndividualIdx(), (int) routeIdx, dto.getGlobalData(), false);
 //                                    sucCustomers.put(removedIdx, newDto);
-                                    sucCustomers.put((int) routeIdx, newDto); // 替换
+                                    sucCustomers.put((int) routeIdx, newDto); // replace the old route with an index of 'routeIdx'
 
-                                    // 5. 更新routeIdx
+                                    // 5.update the routeIdx
                                     routeIdxs.add(dto.getRouteIdx());
-                                    System.out.println("新的sucCustomers：" + sucCustomers);
+//                                    System.out.println("新的sucCustomers：" + sucCustomers);
 //                                    System.out.println("现在unassigned：" + unassignedCustomer);
                                 }
                             }
                         }
-                        System.out.println("更新后的customerList： " + rewritableList);
+//                        System.out.println("更新后的customerList： " + rewritableList);
 
-                        // rewritableList去重
+                        // De-duplicate 'rewritableList'
                         List<Customer> deDuplicated = new CopyOnWriteArrayList<>();
                         for (Customer customer : rewritableList) {
                             if (!deDuplicated.contains(customer)) deDuplicated.add(customer);
                         }
                         rewritableList = deDuplicated;
-                        System.out.println("去重后的customerList： " + rewritableList);
+//                        System.out.println("去重后的customerList： " + rewritableList);
                     }
                 }
             }
-            System.out.println("现在车辆：" + data.getVehicleList().toString());
+//            System.out.println("现在车辆：" + data.getVehicleList().toString());
 
-//        individuals=initialIndividuals(individuals,nPop,len,random,data); // 初始化个体列表
-            // 2)初始化个体列表，重新分配成功分配的请求
-            List<Route> routes = individuals.get(0).getRoutes(); // 目前种群大小=1
+            // 2)initialize the individual list, reassign customers that had been successful added
+            // TODO  初始化个体列表，重新分配成功分配的请求
+            List<Route> routes = individuals.get(0).getRoutes(); // current size of the population is 1
             for (int idx : routeIdxs) {
-                // 初始化route
+                // initialize the route
                 for (Route route : routes) {
                     if (idx == route.getId()) {
                         System.out.println("idx: " + idx);
@@ -6262,13 +5549,13 @@ public class AADS {
                         route.setOverallDistance(0);
                         route.setOverallDuration(0);
                         route.setOverallWeight(0);
-                        // 车辆、randN不重置
+                        // do not reset the vehicle and randN
                     }
                 }
                 individuals.get(0).setRoutes(routes);
-                // 初始化成功分配的请求列表
+                // initialize the list of successfully assigned customers TODO  初始化成功分配的请求列表
                 sucCustomers = new HashMap<>();
-                // 初始化全局变量data
+                // initialize the global data 'data'
                 data = PreProcessData.initialize(tmpData);
                 for (int i = 0; i < data.getVehicleList().size(); i++) {
                     Vehicle vehicle = data.getVehicleList().get(i);
@@ -6280,20 +5567,21 @@ public class AADS {
                     vehicle.setCurSiteId(vehicle.getStartSite());
                     data.getVehicleList().set(i, vehicle);
                 }
-                data = tmpData; // 初始化data为全局data（全局data只可用，不可更新操作，除了在main()中
+                data = tmpData; // global data is only readable, except in the main function TODO 全局数据仅可读，主函数除外
                 data.setOverallDeliverTime(new Date());
-                // 重新插入能成功分配的请求(以订单为顺序)
-                res = assignCustomers(individuals, data, true, sucCustomers, rewritableList); //TODO  1204 1357改为了true
+                // reinsert customers that assigned successfully(order by customers) TODO 重新插入能成功分配的请求(以订单为顺序)
+                res = assignCustomers(individuals, data, true, sucCustomers, rewritableList); // the third parameter means the control of different allocation modes
+                // TODO 第三个参数表示控制不同的分配方式
                 if (res != null) {
                     individuals = res.getFirst(); // individual list
                     sucCustomers = res.getSecond(); // successful customers
                 }
             }
-            System.out.println("individuals3: " + individuals);
-            System.out.println("susCustomers3: " + sucCustomers);
+//            System.out.println("individuals3: " + individuals);
+//            System.out.println("susCustomers3: " + sucCustomers);
         }
 
-        // 6. 执行每条路线的返程
+        // 6. add a return route for each successful allocated route
         if (!sucCustomers.isEmpty()) {
             addReturnRoute(sucCustomers, data, individuals);
         }
@@ -6430,6 +5718,9 @@ public class AADS {
         return population;
     }
 
+    /**
+     * Selection part of the GGA
+     */
     protected static List<Individual> selection(PreProcessData data, Population population) {
         List<Individual> res = new ArrayList<>();
 
@@ -6505,12 +5796,14 @@ public class AADS {
         return res;
     }
 
+    /**
+     * Crossover part of the GGA
+     */
     protected static List<Individual> crossover(PreProcessData data, Population population, Double pCross, List<Individual> parents) {
         List<Individual> res = new ArrayList<>();
 
         if (population != null) {
             int N = parents.get(1).getRoutes().size(); // 第一个parent的路线数
-            System.out.println("N: " + N);
             if (parents != null && !parents.isEmpty()) {
                 Random random = data.getRandom();
                 if (random != null) {
@@ -6520,10 +5813,7 @@ public class AADS {
 //                        point1=random.nextInt(N);
 //                         point2=random.nextInt(N);
 //                    }
-
-                    // 1. 均匀交叉
                 }
-
             } else {
                 System.out.println("Parents are empty.");
             }
@@ -6538,51 +5828,53 @@ public class AADS {
      */
     protected static Individual GGA(PreProcessData data) throws IllegalArgumentException {
         /**
-         * 个体：每辆车的工作安排
-         * 种群：所有车组成的一个调度规划
-         * 适应度值：交付所有订单所需的总工作时间
+         * Individual: arrange of each vehicle
+         * Population: all vehicles composing a scheduling plan  TODO  所有车组成的一个调度规划
+         * Fitness: the time needed to finish all the customers TODO  交付所有订单所需的总工作时间
          */
         // 1. parameters
         int nPop = 1; // size of population(number of individuals in the population)
-        double pCross = 1.0; // 交叉概率
-        double pMut = 0.5; // 变异概率
-        int nMax = 15000; // maximum number of individual (原文15000)
-        int nMaxWithoutImprovement = 3000; // unimproved maximum number of individual (原文3000)
+        double pCross = 1.0; // crossover probability
+        double pMut = 0.5; // mutation probability
+        int nMax = 15000; // maximum number of individual  TODO
+        int nMaxWithoutImprovement = 3000; // unimproved maximum number of individual  TODO
         Individual bestIndividual = new Individual(); // best individual
 
-        // 2. 初始化种群P
-        Population population = initializePopulation(data, nPop);
+        // 2. initialize the population P
+        Population population = initializePopulationWithGreedy(data, nPop);
 
-        // 3. 设置迭代终止条件
-        int termination = 0; // 终止条件
+        // 3. set the iteration termination condition
+        int termination = 0;
 
-        // 4. 只要未满足终止条件，就循环
+        // 4. loop if it does not meet the termination condition
         while (termination <= nMaxWithoutImprovement) {
-//            // 1)选择: 根据适应度值，从P选择一对个体x、y作为parents
+            // 1)selection: according to the fitness, select a pair of individuals x and y from P as parents
+//            TODO  根据适应度值，从P选择一对个体x、y作为parents
 //            List<Individual> parents = selection(data, population);
 //            Individual x = new Individual(), y = new Individual();
 //            if (!parents.isEmpty()) {
 //                x = parents.get(0);
 //                y = parents.get(1);
 //            }
-//            System.out.println("first: "+x);
-//            System.out.println("second: "+y);
 //
-//            // 2)交叉: 以pCross的概率应用交叉算子到x和y生成两个子代x',y'
+            // 2)crossover: apply the crossover operator to x and y with probability pCross to generate two offspring x', y'
+            // TODO  以pCross的概率应用交叉算子到x和y生成两个子代x',y'
 //            List<Individual> children = crossover(data, population, pCross, parents);
 //
-//            // 3)变异: 以pMut的概率应用变异算子到x'和y'，分别生成两个修改后的子代x'',y''
+            // 3)mutation: apply the mutation operator to x' and y' with probability pMut to generate two modified offspring x'', y'' respectively
+            // TODO  以pMut的概率应用变异算子到x'和y'，分别生成两个修改后的子代x'',y''
 //            mutation();
 //
-//            // 4)更新种群P: 将x''和y''插入P，并相应地从P中移除两个最差的个体
-////            updatePopulation();
-//
-            // 5)更新终止条件的值
+            // 4)update the population P: insert x'' and y'' into P, removing the two worst individuals from P accordingly
+            // TODO  将x''和y''插入P，并相应地从P中移除两个最差的个体
+//            updatePopulation();
+
+            // 5)update the value of the termination condition
             termination++;
         }
 
-        // 5. 从种群P中返回最佳个体作为解
-        bestIndividual = population.getIndividuals().get(0); // 默认返回第一个个体作为最佳个体
+        // 5. get the best individual from the population
+        bestIndividual = population.getIndividuals().get(0); // default: first individual
         return bestIndividual;
     }
 
@@ -6619,7 +5911,7 @@ public class AADS {
                     "DelayTime,ServiceTime,DepartureTime,Break1Time,Break1Duration," +
                     "Break2Time,Break2Duration,Distance,SequenceNo");
 
-//            List<Long> cusId = new ArrayList<>();
+            List<Long> cusId = new ArrayList<>();
 
             // 2. get time nodes from each route
             for (Route route : bestIndividual.getRoutes()) {
@@ -6640,26 +5932,25 @@ public class AADS {
                 timeList.addAll(waitTimeList);
                 timeList.addAll(delayTimeList);
 
-                // TODo 1206 1953注释
-//                // 3)将timeList按照customerId分组（使用java8的stream API）
-//                Map<Long, List<Time>> group = timeList.stream()
-//                        .collect(Collectors.groupingBy(Time::getCustomerId));
-//
-//                // 4)遍历每个分组，其中eachTimeList是当前路线的每个请求所在分组
-//                List<Time> processedTimeList = new ArrayList<>(); // 存放最终的数据
-//                group.forEach((customerId, eachTimeList) -> {
-//                    boolean isCollected = false, isDelivered = false; // 判断是否只有collect/deliver
-//                    for (Time time : eachTimeList) {
-//                        if (time.getJobId().contains("C-")) isCollected = true;
-//                        if (time.getJobId().contains("D-")) isDelivered = true;
-//                    }
-//                    if (isCollected && isDelivered) { // 某个customer在某个路线中同时被collect、deliver，表明该请求在该路线中成功分配
-//                        processedTimeList.addAll(eachTimeList); // 加入列表
-//                        cusId.add(customerId); // test
-//                    }
-//                });
-//                timeList = processedTimeList; // 赋值处理后的timeList
-////                System.out.println("TimeList: " + timeList);
+                // 3)将timeList按照customerId分组（使用java8的stream API）
+                Map<Long, List<Time>> group = timeList.stream()
+                        .collect(Collectors.groupingBy(Time::getCustomerId));
+
+                // 4)遍历每个分组，其中eachTimeList是当前路线的每个请求所在分组
+                List<Time> processedTimeList = new ArrayList<>(); // 存放最终的数据
+                group.forEach((customerId, eachTimeList) -> {
+                    boolean isCollected = false, isDelivered = false; // 判断是否只有collect/deliver
+                    for (Time time : eachTimeList) {
+                        if (time.getJobId().contains("C-")) isCollected = true;
+                        if (time.getJobId().contains("D-")) isDelivered = true;
+                    }
+                    if (isCollected && isDelivered) { // 某个customer在某个路线中同时被collect、deliver，表明该请求在该路线中成功分配
+                        processedTimeList.addAll(eachTimeList); // 加入列表
+                        cusId.add(customerId); // test
+                    }
+                });
+                timeList = processedTimeList; // 赋值处理后的timeList
+//                System.out.println("TimeList: " + timeList);
 
                 // 5)sort the integrated list
                 timeList.sort((o1, o2) -> Long.compare(o1.getId(), o2.getId()));
@@ -6941,9 +6232,9 @@ public class AADS {
 
         // 2. preprocess the data
         PreProcessData data = preProcessData(rawData);
-        tmpData = data; // 赋值给全局data
+        tmpData = data; // assign to the global data 'tmpData'
 
-        // 3. GGA algorithm
+        // 3. try to use the GGA algorithm
         Individual bestIndividual = GGA(data);
 
         // 4. output the best individual
@@ -6951,6 +6242,6 @@ public class AADS {
 
         // (5. test) output the time used
         long end = System.currentTimeMillis();
-        System.out.println("overall time consuming: " + (end - start) * 1.0 / 1000 + "s");
+        System.out.println("Overall time consuming: " + (end - start) * 1.0 / 1000 + "s");
     }
 }
