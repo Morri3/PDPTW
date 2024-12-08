@@ -5186,7 +5186,7 @@ public class AADS {
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // WaitTime equals zero
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // DelayTime equals zero
                 output.append(formatDate(0, "H'h'm'm'")).append(","); // ServiceTime equals zero
-                output.append(formatDate(route.getVehicle().getStartTime().getTime(), "HH:mm")).append(","); // DepartureTime equals to ArrivalTime
+                output.append(formatDate(route.getVehicle().getStartTime().getTime(), "extract")).append(","); // DepartureTime equals to ArrivalTime
                 output.append(",").append(",").append(",").append(","); // related BreakTime are zero
                 output.append(0).append(","); // Distance equals to zero
                 output.append(1).append("\n"); // SequenceNo with \n
