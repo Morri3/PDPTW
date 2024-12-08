@@ -4945,12 +4945,12 @@ public class AADS {
         population.setIndividuals(individuals);
 
         // (10.) for testing
-        System.out.println("Overall fitness:  " + population.getOverallFitness() + " hours"); // test
+//        System.out.println("Overall fitness:  " + population.getOverallFitness() + " hours"); // test
         int num = 0;
         for (Route route : population.getIndividuals().get(0).getRoutes()) {
             if (route.getCustomers() != null && !route.getCustomers().isEmpty()) num++;
         }
-        System.out.println("Overall used routes：" + num); // test
+//        System.out.println("Overall used routes：" + num); // test
         return population;
     }
 
@@ -5454,6 +5454,6 @@ public class AADS {
 
         // (5. test) output the time used
         long end = System.currentTimeMillis();
-        System.out.println("Overall time consuming: " + (end - start) * 1.0 / 1000 + "s");
+//        System.out.println("Overall time consuming: " + (end - start) * 1.0 / 1000 + "s");
     }
 }
