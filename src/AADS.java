@@ -35,14 +35,14 @@ public class AADS {
      * Allow the parsing of JSON source strings, called in the JSONObject and JSONArray constructors.
      */
     protected static class JSONTokener {
-        private long character; // current read character position on the current line当前行的当前读字符的位置
-        private boolean eof; // flag to indicate if the end of the input has been found是否是输入末尾
-        private long index; // current read index of the input输入的当前读的下标
-        private long line; // current line of the input输入的当前行
-        private char previous; // previous character read from the input从输入读取的上一个字符
+        private long character; // current read character position on the current line
+        private boolean eof; // flag to indicate if the end of the input has been found
+        private long index; // current read index of the input
+        private long line; // current line of the input
+        private char previous; // previous character read from the input
         private final Reader reader; // Reader for the input
-        private boolean usePrevious; // flag to indicate that a previous character was requested是否已经请求上一个字符
-        private long characterPreviousLine; // the number of characters read in the previous line上一行读取的字符总数
+        private boolean usePrevious; // flag to indicate that a previous character was requested
+        private long characterPreviousLine; // the number of characters read in the previous line
 
         /**
          * Construct a JSONTokener from a Reader. The caller must close the Reader.
@@ -341,7 +341,7 @@ public class AADS {
      * Configuration object (immutable) for the JSON parser.
      */
     protected static class JSONParserConfiguration extends ParserConfiguration {
-        private boolean overwriteDuplicateKey; // 是否覆盖key
+        private boolean overwriteDuplicateKey; // whether need to overwrite key
 
         public JSONParserConfiguration() {
             super();
@@ -1067,7 +1067,7 @@ public class AADS {
                 return this.put(value);
             }
             // if we are inserting past the length, we want to grow the array all at once instead of incrementally
-            this.myArrayList.ensureCapacity(index + 1); // 指定容量+1
+            this.myArrayList.ensureCapacity(index + 1); // size plus 1
             // fulfil the remaining empty positions with JSONObject.NULL object
             while (index != this.length()) {
                 this.myArrayList.add(JSONObject.NULL);
@@ -3793,7 +3793,7 @@ public class AADS {
                 }
                 tmpTimeList.clear(); // clear
                 // 4. set current site id
-                Vehicle curVehicle = getVehicle(); // 获取当前route的车辆
+                Vehicle curVehicle = getVehicle(); // get current vehicle of the route
                 curVehicle.setCurSiteId((int) deliverSite.getId());
                 setVehicle(curVehicle);
                 // 5. the overall weight is set only when the last order is delivered
