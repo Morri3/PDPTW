@@ -17,7 +17,7 @@ The final code file called `AADS.java` is a single Java source code file contain
    ```
 
 **Tips**: 
-1) Content in brackets should be specified according to your input files and output files.
+1) Contents enclosed by square brackets (including square brackets) should be specified according to your input files and output files.
 2) In the command of execution, the `Input.json` represents the input JSON file and the `Output.txt` represents the output file.
 3) The input JSON file should be located in the same directory as the `AADS.java` file.
 4) The program sends its output to standard output (by executing the above command, it will produce Output.txt in the same directory as `AADS.java` and `Input.json`, so no FileWriter is required).
