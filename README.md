@@ -13,12 +13,13 @@ The final code file called `AADS.java` is a single Java source code file contain
    ```
 2) Execute:
    ```
-   java -Dfile.encoding=UTF-8 -XX:+UseSerialGC -Xss64m -Xms1920m -Xmx1920m AADS < Input.json > Output.txt
+   java -Dfile.encoding=UTF-8 -XX:+UseSerialGC -Xss64m -Xms1920m -Xmx1920m AADS < [Input.json] > [Output.txt]
    ```
 
 **Tips**: 
-1) In the command of execution, the `Input.json` represents the input JSON file and the `Output.txt` represents the output file.
-2) The input JSON file should be located in the same directory as the `AADS.java` file.
-3) The program sends its output to standard output (by executing the above command, it will produce Output.txt in the same directory as `AADS.java` and `Input.json`, so no FileWriter is required)
+1) Content in brackets should be specified according to your input files and output files.
+2) In the command of execution, the `Input.json` represents the input JSON file and the `Output.txt` represents the output file.
+3) The input JSON file should be located in the same directory as the `AADS.java` file.
+4) The program sends its output to standard output (by executing the above command, it will produce Output.txt in the same directory as `AADS.java` and `Input.json`, so no FileWriter is required).
 
 ---
