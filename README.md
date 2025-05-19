@@ -1,11 +1,11 @@
 # Solving PDPTW problem based on Greedy Algorithm
-This is the coursework of COMP4134 Advanced Topics in Machine Learning (2024-2025).
+This is the project of COMP4134 Advanced Topics in Machine Learning (2024-2025).
 
 ---
 
 ## How to use codes?
 
-The final code file called `AADS.java` is a single Java source code file containing all code for this coursework. The file doesn't require any other files outside of the standard Java packages, which are always available. The file must compile and execute without warnings or errors using the command.
+The final code file called `AADS.java` is a single Java source code file containing the whole code for this coursework. The file doesn't require any other files outside of the standard Java packages, which are always available. The file must compile and execute without warnings or errors using the command.
 
 1) Compile:
    ```
